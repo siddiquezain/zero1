@@ -32,18 +32,28 @@ CREATE TABLE IF NOT EXISTS alerts (
     alert_id              TEXT PRIMARY KEY,
     lat                   REAL,
     lon                   REAL,
+    -- PS-aligned 3-class output label
+    output_class          TEXT,
+    -- Alert triage severity
     severity              TEXT,
     status                TEXT,
     risk_score            INTEGER,
+    -- PS-required: land-cover context
+    land_cover_context    TEXT,
+    -- PS-required: facility hazard type
+    hazard_facility_type  TEXT,
+    -- Raw thermal features
     frp_mw                REAL,
     bt_kelvin             REAL,
     persistence_count     INTEGER,
     dist_nearest_facility_km REAL,
     nearest_facility_type TEXT,
+    -- Classifier outputs
     predicted_label       TEXT,
     prob_A                REAL,
     prob_B                REAL,
     anomaly_flag          INTEGER,
+    -- Context
     nearest_city          TEXT,
     dist_nearest_city_km  REAL,
     near_population       INTEGER,
@@ -98,19 +108,24 @@ def insert_alerts(rows: list[dict]) -> int:
 
         con.execute(
             """INSERT INTO alerts (
-                alert_id, lat, lon, severity, status, risk_score,
+                alert_id, lat, lon,
+                output_class, severity, status, risk_score,
+                land_cover_context, hazard_facility_type,
                 frp_mw, bt_kelvin, persistence_count,
                 dist_nearest_facility_km, nearest_facility_type,
                 predicted_label, prob_A, prob_B, anomaly_flag,
                 nearest_city, dist_nearest_city_km, near_population,
                 acq_date, day_night, narrative, created_at, updated_at
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 str(uuid.uuid4())[:12],
                 row["lat"], row["lon"],
+                str(row.get("output_class", "") or ""),
                 row.get("severity", "LOW"),
                 status,
                 int(row.get("risk_score", 0)),
+                str(row.get("land_cover_context", "") or ""),
+                str(row.get("hazard_facility_type", "") or ""),
                 float(row.get("frp_mw", 0) or 0),
                 float(row.get("bt_kelvin", 0) or 0),
                 int(row.get("persistence_count", 1) or 1),

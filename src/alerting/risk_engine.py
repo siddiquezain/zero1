@@ -1,27 +1,40 @@
 """
-Risk engine — converts a scored FIRMS hotspot into a severity level + narrative.
+Risk engine — converts a scored FIRMS hotspot into:
+  - output_class      (PS-aligned 3-class output)
+  - severity          (CRITICAL / HIGH / MEDIUM / LOW — for alert triage)
+  - land_cover_context (land-cover integration per PS requirement)
+  - hazard_facility_type (PS-specified facility categories)
+  - narrative
 
-Severity tiers (score 0–100):
+OUTPUT CLASSES (aligned to PS deliverable i):
+    Industrial Fire / Abnormal Thermal Event
+        Hotspot anomalous: neither persistent-flare nor natural-fire pattern.
+        Signals accidental fires, gas leaks, explosions, abnormal thermal events.
+        (model anomaly_flag = 1, i.e. max class probability < 0.55)
+
+    Persistent Industrial Thermal Source
+        Continuous thermal signature matching known gas-flare / industrial-heat
+        patterns: oil refineries, steel plants, thermal power plants, kilns.
+        (model Class A, anomaly_flag = 0)
+
+    Forest / Agricultural Fire
+        Natural or crop-residue burning: wildfires, paddy-stubble, savanna.
+        (model Class B, anomaly_flag = 0)
+
+LAND-COVER CONTEXT (PS requirement: "integrates land-cover information"):
+    Derived from coordinate-based India vegetation/land-use zones + seasonal
+    agricultural burning flags + facility proximity. No MODIS raster needed.
+
+FACILITY HAZARD TYPES (PS-specified):
+    Oil Refinery / Petrochemical · Thermal Power Plant · Steel / Metal Industry
+    Mining / Extraction · LNG / Gas Terminal · Chemical / Pharmaceutical
+    Brick Kiln / Ceramic · Industrial Facility (generic)
+
+SEVERITY TIERS (score 0–100):
     CRITICAL  ≥ 65   Anomalous + persistent + near facility/population
     HIGH      ≥ 40   Anomalous or high FRP or persistent near infrastructure
     MEDIUM    ≥ 20   Moderate signal — monitor
     LOW        < 20  Single low-confidence detection
-
-Score contributions (all additive):
-    Anomaly flag (model uncertain = neither flare nor natural fire)  +30
-    FRP ≥ 30 MW                                                      +25
-    FRP 15–30 MW                                                      +15
-    FRP 5–15 MW                                                       +8
-    Persistence ≥ 4 detections                                        +20
-    Persistence 2–3                                                    +10
-    Distance to facility < 1 km                                       +20
-    Distance to facility 1–5 km                                       +12
-    Distance to facility 5–15 km                                      +6
-    Predicted Class A (industrial pattern)                            +10
-    FIRMS confidence 'h' or numeric ≥ 70                              +8
-    Nighttime detection                                                +5
-
-Population-proximity bonus (nearest major city < 30 km):            +10
 """
 from __future__ import annotations
 
@@ -66,11 +79,90 @@ _CITIES = [
 ]
 
 
+# ── PS-required output class labels ───────────────────────────────────────────
+OUTPUT_CLASS_INDUSTRIAL_FIRE = "Industrial Fire / Abnormal Thermal Event"
+OUTPUT_CLASS_PERSISTENT_SOURCE = "Persistent Industrial Thermal Source"
+OUTPUT_CLASS_NATURAL_FIRE = "Forest / Agricultural Fire"
+
+# ── Facility hazard type mapping (PS-specified categories) ────────────────────
+_HAZARD_TYPE_MAP: list[tuple[list[str], str]] = [
+    (["refinery", "petroleum", "hpcl", "bpcl", "iocl", "petrochemical", "nrl"],
+     "Oil Refinery / Petrochemical"),
+    (["coal", "gas", "oil", "thermal", "ntpc", "biomass", "waste", "petcoke", "cogeneration"],
+     "Thermal Power Plant"),
+    (["steel", "metal", "nalco", "aluminium", "zinc", "iron", "smelter"],
+     "Steel / Metal Industry"),
+    (["mine", "mining", "quarry", "coalfield", "colliery"],
+     "Mining / Extraction"),
+    (["lng", "liquefied", "terminal", "port", "jetty"],
+     "LNG / Gas Terminal"),
+    (["chemical", "pharma", "pesticide", "fertiliser", "fertilizer", "chlor"],
+     "Chemical / Pharmaceutical"),
+    (["brickyard", "brickworks", "brick", "kiln", "ceramic", "tile"],
+     "Brick Kiln / Ceramic"),
+    (["nuclear"],
+     "Nuclear Power Plant"),
+]
+
+
+def classify_hazard_type(raw_facility_type: str) -> str:
+    """Map raw facility_type string to a PS-aligned hazard category."""
+    ft = (raw_facility_type or "").lower()
+    for keywords, label in _HAZARD_TYPE_MAP:
+        if any(k in ft for k in keywords):
+            return label
+    return "Industrial Facility"
+
+
+# ── Land-cover context (PS: "integrates land-cover information") ──────────────
+# Derived without MODIS raster: coordinate-based Indian land-cover zones +
+# agri_season_flag + persistence/facility context.
+def _land_cover_context(lat: float, lon: float,
+                        agri_flag: int, dist_fac_km: float,
+                        persistence: int) -> str:
+    # Persistent detection very close to industrial facility → industrial land use
+    if dist_fac_km < 2 and persistence >= 2:
+        return "Industrial Land Use"
+
+    # Agricultural burning zones (seasonal flag + known crop belts)
+    if agri_flag == 1:
+        if 28 <= lat <= 32 and 73 <= lon <= 78:  # Punjab / Haryana wheat-rice belt
+            return "Cropland — Kharif/Rabi (Punjab/Haryana)"
+        if 15 <= lat <= 20 and 76 <= lon <= 81:  # Andhra/Telangana paddy
+            return "Cropland — Paddy (Andhra/Telangana)"
+        return "Cropland / Agricultural"
+
+    # Dense forest zones (India's major forest belts)
+    if 8 <= lat <= 13 and 75 <= lon <= 78:   # Western Ghats south (Kerala/TN)
+        return "Dense Forest — Western Ghats"
+    if 13 <= lat <= 20 and 73 <= lon <= 76:  # Western Ghats north (Goa/Karnataka)
+        return "Dense Forest — Western Ghats"
+    if lat >= 25 and lon >= 90:              # Northeast India (Assam, Arunachal, Meghalaya)
+        return "Dense Forest — Northeast India"
+    if 18 <= lat <= 24 and 80 <= lon <= 85:  # Central India (Chhattisgarh/Odisha forests)
+        return "Forest / Savanna — Central India"
+    if 21 <= lat <= 26 and 85 <= lon <= 88:  # Jharkhand/West Bengal forests
+        return "Forest / Mixed — Jharkhand"
+
+    # Mining / industrial corridors
+    if 20 <= lat <= 24 and 83 <= lon <= 87:  # Jharkhand–Odisha coal/steel corridor
+        return "Mining / Industrial Corridor"
+
+    # Coastal / port industrial zones
+    if lon < 72.5 or (lat < 12 and lon > 79):
+        return "Coastal / Port Zone"
+
+    return "Mixed / Unknown"
+
+
 @dataclass
 class RiskResult:
     score: int
-    severity: str         # CRITICAL / HIGH / MEDIUM / LOW
-    status: str           # DETECTED (initial state)
+    severity: str           # CRITICAL / HIGH / MEDIUM / LOW
+    status: str             # DETECTED (initial state)
+    output_class: str       # PS-aligned 3-class label
+    land_cover_context: str # land-cover integration (PS requirement)
+    hazard_facility_type: str  # PS-specified facility category
     narrative: str
     nearest_city: str
     dist_nearest_city_km: float
@@ -173,7 +265,22 @@ def score_row(row: dict | pd.Series) -> RiskResult:
     else:
         severity = "LOW"
 
-    # Narrative
+    # ── PS output class ───────────────────────────────────────────────────────
+    agri_flag = int(row.get("agri_season_flag", 0) or 0)
+    if anomaly:
+        output_class = OUTPUT_CLASS_INDUSTRIAL_FIRE
+    elif pred == "A":
+        output_class = OUTPUT_CLASS_PERSISTENT_SOURCE
+    else:
+        output_class = OUTPUT_CLASS_NATURAL_FIRE
+
+    # ── Land-cover context ────────────────────────────────────────────────────
+    land_cover = _land_cover_context(lat, lon, agri_flag, dist_fac, persist)
+
+    # ── Hazard facility type ──────────────────────────────────────────────────
+    hazard_type = classify_hazard_type(fac_type)
+
+    # ── Narrative ─────────────────────────────────────────────────────────────
     parts = []
     if anomaly:
         parts.append("Pattern anomaly — neither persistent flare nor natural fire")
@@ -182,15 +289,19 @@ def score_row(row: dict | pd.Series) -> RiskResult:
     if persist > 1:
         parts.append(f"{persist} repeat detections in 5-day window")
     if dist_fac < 15:
-        parts.append(f"≤{dist_fac:.1f} km from {fac_type} facility")
+        parts.append(f"≤{dist_fac:.1f} km from {hazard_type}")
     if city_dist_km < 50:
         parts.append(f"{city_dist_km:.0f} km from {city} (pop {city_pop:,})")
+    parts.append(f"Land cover: {land_cover}")
     narrative = " · ".join(parts) if parts else "Low-confidence single detection"
 
     return RiskResult(
         score=s,
         severity=severity,
         status="DETECTED",
+        output_class=output_class,
+        land_cover_context=land_cover,
+        hazard_facility_type=hazard_type,
         narrative=narrative,
         nearest_city=city,
         dist_nearest_city_km=round(city_dist_km, 1),
@@ -202,9 +313,12 @@ def score_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     """Apply risk scoring to every row. Returns df with new columns added."""
     results = [score_row(row) for _, row in df.iterrows()]
     out = df.copy()
+    out["output_class"] = [r.output_class for r in results]
     out["risk_score"] = [r.score for r in results]
     out["severity"] = [r.severity for r in results]
     out["alert_status"] = [r.status for r in results]
+    out["land_cover_context"] = [r.land_cover_context for r in results]
+    out["hazard_facility_type"] = [r.hazard_facility_type for r in results]
     out["narrative"] = [r.narrative for r in results]
     out["nearest_city"] = [r.nearest_city for r in results]
     out["dist_nearest_city_km"] = [r.dist_nearest_city_km for r in results]
