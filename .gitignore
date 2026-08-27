@@ -33,3 +33,4 @@ dashboard/screenshot*.png
 
 # OS
 .DS_Store
+data/alerts.db
