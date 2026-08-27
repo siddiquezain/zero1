@@ -1,0 +1,435 @@
+We need to make one important methodological decision explicit before continuing implementation of **SIH26162**.
+
+Read `context.md` fully first. It is the project's source of truth.
+
+## Core approach: Global training, India-held-out evaluation
+
+Although the SIH problem is specifically intended for **India**, we should **NOT use Indian hotspot data for training the classifier**.
+
+This is intentional and is NOT a conflict with the India-focused solution.
+
+Our approach is:
+
+```text
+                 GLOBAL DATA
+                     │
+                     ▼
+             Build training data
+                     │
+          ┌──────────┴──────────┐
+          │                     │
+   Class A: Persistent     Class B: Natural/
+   industrial thermal     agricultural fire
+      patterns                 patterns
+          │                     │
+          └──────────┬──────────┘
+                     ▼
+               Train model
+                     │
+                     ▼
+          ┌──────────────────────┐
+          │   Trained classifier │
+          └──────────┬───────────┘
+                     │
+                     ▼
+              INDIA DATA ONLY
+          (never seen during training)
+                     │
+          ┌──────────┴──────────┐
+          ▼                     ▼
+   Geographic holdout       Real Indian
+       evaluation           incidents
+          │                     │
+          └──────────┬──────────┘
+                     ▼
+             India deployment
+```
+
+### Why are we doing this?
+
+The model is supposed to learn **physical/thermal patterns**, not memorize Indian locations or facilities.
+
+Characteristics such as:
+
+* brightness temperature
+* FRP
+* persistence
+* day/night behaviour
+* land-cover context
+* seasonal behaviour
+* facility context
+
+are not inherently restricted to India.
+
+Therefore, global training provides a broader sample of the underlying phenomena.
+
+Then we deliberately hold India out to answer a much stronger question:
+
+> **Can a model trained on global thermal patterns generalize to Indian conditions it has never seen during training?**
+
+This is effectively a geographic generalization test.
+
+## VERY IMPORTANT: "Don't train on India" does NOT mean "don't use Indian data"
+
+India is still central to the project.
+
+Indian data can and should be used for:
+
+### 1. Final geographic holdout evaluation
+
+Use Indian FIRMS/VIIRS observations to evaluate the trained model.
+
+India must not appear in:
+
+* training
+* validation used for model selection
+* hyperparameter tuning
+* threshold tuning
+* feature selection based on performance
+* calibration based on Indian labels
+
+The India evaluation should happen only after the model/design has been finalized using non-Indian data.
+
+### 2. Indian facility/context layer
+
+Indian facilities can be used during Indian inference/evaluation for contextual features such as:
+
+* distance to nearest facility
+* facility type
+* industrial context
+
+However, facility proximity must remain a **feature**, never a ground-truth label.
+
+### 3. Indian confirmed-incident set
+
+The manually curated Indian industrial incidents described in `context.md` should be used as an independent evaluation/demo set.
+
+These are NOT conventional positive training examples.
+
+Match them against FIRMS/VIIRS and preserve:
+
+```text
+matched = yes/no
+```
+
+If there is no satellite detection, retain the incident and demonstrate the satellite-omission limitation.
+
+### 4. Indian deployment/demo
+
+The final dashboard is India-focused.
+
+It should show Indian hotspots and provide predictions/anomaly scores for Indian observations.
+
+---
+
+# Strict anti-leakage rule
+
+Treat the India holdout as a **locked test region**.
+
+Once the India evaluation dataset is defined, do not use its performance to make modeling decisions.
+
+For example, DO NOT:
+
+```text
+Train globally
+↓
+Test on India
+↓
+Notice poor performance
+↓
+Change threshold
+↓
+Test India again
+```
+
+That would turn the India test set into a validation set.
+
+Instead:
+
+```text
+Global non-India data
+        ↓
+Training
+        ↓
+Non-India validation / spatial or facility holdout
+        ↓
+Finalize model + features + thresholds
+        ↓
+LOCK MODEL
+        ↓
+India evaluation
+        ↓
+Final reported India performance
+```
+
+If we need model selection or hyperparameter tuning, perform it using the **non-India training/validation data only**.
+
+---
+
+# Avoid spatial/facility leakage
+
+There is another critical requirement from `context.md`.
+
+Do NOT use a simple random train/test split as the primary evaluation.
+
+Repeated observations from the same facility or nearby spatial cells can occur multiple times in satellite data.
+
+Therefore, implement appropriate grouping such as:
+
+* facility ID
+* spatial grid cell
+* geographic region
+
+where applicable.
+
+The final evaluation should include the India geographic holdout.
+
+If practical, report:
+
+1. Random-split baseline
+2. Facility/spatial holdout
+3. India geographic holdout
+
+The purpose is to expose potential leakage rather than hide it.
+
+---
+
+# How to explain this to SIH judges
+
+The system should be framed as:
+
+> **"We train on globally observed thermal patterns and deliberately hold India out during training. This allows us to test whether the learned physical signatures generalize to Indian conditions rather than simply memorizing Indian facilities. India is therefore not excluded from the solution — it is the most important independent evaluation and deployment region."**
+
+Do NOT say:
+
+> "We don't have enough Indian data."
+
+Do NOT make it sound like India was excluded because of a limitation.
+
+The intentional scientific reasoning is:
+
+> **Global training → India geographic generalization test → India deployment**
+
+---
+
+# Data separation requirements
+
+Design the data pipeline so the separation is technically difficult to violate.
+
+Prefer explicit dataset partitions such as:
+
+```text
+/data/raw/
+    global/
+    india/
+
+/data/processed/
+    training_global/
+    validation_global/
+    india_holdout/
+
+/data/incidents/
+    india_confirmed_incidents/
+```
+
+The exact structure can be adapted to the existing repository, but the conceptual separation must remain.
+
+Every processed dataset should retain metadata indicating:
+
+```text
+region
+country
+source_dataset
+facility_id
+spatial_grid_id
+split
+```
+
+For example:
+
+```text
+split = train_global
+split = validation_global
+split = india_holdout
+```
+
+Never infer the split later from filenames if it can be explicitly stored.
+
+---
+
+# Critical distinction about labels
+
+Remember the project's fundamental labeling problem.
+
+A FIRMS hotspot does NOT tell us:
+
+> "This is an industrial fire."
+
+Therefore:
+
+### Class A
+
+Use defensible sources such as:
+
+* VIIRS Nightfire
+* GIHS where verified
+
+for persistent industrial thermal-source examples.
+
+### Class B
+
+Construct natural/agricultural fire examples using the methodology described in `context.md`.
+
+Do not simply say:
+
+```text
+near facility = industrial
+far from facility = natural
+```
+
+That is invalid.
+
+Facility proximity is only a feature.
+
+### Confirmed industrial incidents
+
+The Indian incident dataset is for:
+
+* independent evaluation
+* anomaly demonstration
+* satellite matching analysis
+* limitation analysis
+
+It is NOT a training class.
+
+---
+
+# What the model is actually supposed to learn
+
+Do not frame this as:
+
+> "Industrial fire vs normal fire."
+
+The model is learning patterns such as:
+
+```text
+Persistent industrial thermal pattern
+              vs
+Natural/agricultural fire pattern
+```
+
+Then an actual unusual industrial incident may fall outside both learned patterns.
+
+That allows us to produce:
+
+```text
+ANOMALY / HUMAN REVIEW
+```
+
+rather than falsely claiming:
+
+```text
+CONFIRMED INDUSTRIAL FIRE
+```
+
+This distinction is fundamental to the project.
+
+---
+
+# Implementation requirements
+
+Before modifying the code:
+
+1. Read `context.md` completely.
+2. Inspect the existing repository.
+3. Identify the current stage.
+4. Identify how datasets are currently being loaded/processed.
+5. Check whether India/global separation already exists.
+6. If it does not, implement the separation before proceeding with model training.
+7. Add validation checks that fail loudly if Indian data accidentally enters the training dataset.
+8. Add dataset statistics showing:
+
+   * number of global training rows
+   * number of validation rows
+   * number of India holdout rows
+   * countries/regions represented in each split
+9. Make the split reproducible.
+10. Document the methodology in the project README/report.
+
+## Add automated leakage checks
+
+Implement checks such as:
+
+```text
+assert no India rows in training
+assert no India rows in validation
+assert India rows exist only in holdout/evaluation where intended
+```
+
+Also check for:
+
+```text
+facility overlap
+spatial-grid overlap
+duplicate observations
+temporal leakage
+label leakage
+```
+
+Adapt these checks to the actual dataset schema rather than blindly implementing pseudocode.
+
+## Important
+
+Do not artificially remove India-related contextual information if it is required for Indian inference.
+
+The rule is specifically:
+
+> **Indian observations must not influence classifier training/model selection.**
+
+Indian facility/context data can be used when evaluating or deploying the finalized model on India.
+
+---
+
+# Reporting
+
+When evaluating the model, clearly report:
+
+```text
+Training region:
+Global, excluding India
+
+Validation:
+Non-India spatial/facility holdout
+
+Final geographic test:
+India
+
+Deployment:
+India
+```
+
+If the model performs differently on India than on global validation, report the difference honestly.
+
+Do not tune the model until the India score looks good.
+
+A lower but scientifically honest India score is preferable to an artificially inflated score caused by leakage.
+
+---
+
+# Immediate task
+
+After reading `context.md` and inspecting the repository:
+
+1. Determine whether the current implementation respects this global-training/India-holdout methodology.
+2. If not, identify exactly where leakage could occur.
+3. Fix the architecture/data pipeline before training anything.
+4. Implement robust split-management and leakage checks.
+5. Do NOT download or fabricate data merely to make the pipeline appear complete.
+6. If required datasets/API credentials are unavailable, implement the pipeline interfaces and validation logic without fabricating real observations.
+7. Run tests.
+8. Update the Status Tracker in `context.md`.
+9. Report exactly what was changed and what remains blocked.
+
+Most importantly:
+
+**Do not optimize for the highest possible accuracy. Optimize for scientifically defensible geographic generalization to India.**

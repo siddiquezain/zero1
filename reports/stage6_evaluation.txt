@@ -1,0 +1,95 @@
+SIH26162 — Stage 6 Evaluation Report
+============================================================
+
+Classes: ['A', 'B_candidate']
+Training features: ['bt_kelvin', 'frp_mw', 'persistence_count', 'dist_nearest_facility_km', 'agri_season_flag', 'day_night_bin', 'acq_month']
+
+Data sizes:
+  Train (spatial holdout): 270238 rows
+  Val   (spatial holdout): 64864 rows
+  India (geographic holdout, no labels): 705 rows
+
+Class distribution (train):
+  {'B_candidate': 268583, 'A': 1655}
+
+Design note: VNF avg_temp (1500–2000 K spectral flame temperature)
+is NOT used as a training feature. VNF serves as a labeling oracle only.
+All training examples are in FIRMS feature space (bt_kelvin 300–500 K),
+matching the India inference-time feature space.
+
+Anomaly threshold: max class probability < 0.55
+
+============================================================
+  1. Random-split baseline (INFLATED)
+============================================================
+
+Confusion matrix (rows=true, cols=pred):
+  Classes: ['A', 'B_candidate']
+  [[  289    72]
+ [ 1770 64890]]
+
+Classification report:
+              precision    recall  f1-score   support
+
+           A       0.14      0.80      0.24       361
+ B_candidate       1.00      0.97      0.99     66660
+
+    accuracy                           0.97     67021
+   macro avg       0.57      0.89      0.61     67021
+weighted avg       0.99      0.97      0.98     67021
+
+Anomaly flag rate (max_prob < 0.55): 768 / 67021 (1.1%)
+
+Baseline accuracy: 0.9725
+
+============================================================
+  2. Spatial holdout (HONEST — train on global, test on held-out grids)
+============================================================
+
+Confusion matrix (rows=true, cols=pred):
+  Classes: ['A', 'B_candidate']
+  [[  139   107]
+ [ 1150 63468]]
+
+Classification report:
+              precision    recall  f1-score   support
+
+           A       0.11      0.57      0.18       246
+ B_candidate       1.00      0.98      0.99     64618
+
+    accuracy                           0.98     64864
+   macro avg       0.55      0.77      0.59     64864
+weighted avg       0.99      0.98      0.99     64864
+
+Anomaly flag rate (max_prob < 0.55): 596 / 64864 (0.9%)
+
+Spatial holdout accuracy: 0.9806
+
+============================================================
+LEAKAGE GAP = 0.9725 (random) − 0.9806 (spatial) = -0.0081
+This gap confirms that random splitting inflates accuracy by -0.8 pp.
+The spatial holdout figure is the honest estimate of geographic generalization.
+============================================================
+
+============================================================
+  3. India geographic holdout (NO LABELS — inference only)
+============================================================
+
+Predicted class distribution for 705 India FIRMS hotspots:
+  {'B_candidate': 396, 'A': 309}
+
+Anomaly flag (max_prob < 0.55):
+  59 / 705 rows (8.4%)
+
+(No accuracy reported — India is locked holdout with no ground-truth labels)
+
+
+============================================================
+Feature importances (spatial holdout model):
+  dist_nearest_facility_km                 0.2928
+  day_night_bin                            0.2535
+  bt_kelvin                                0.2139
+  persistence_count                        0.1385
+  frp_mw                                   0.1014
+  agri_season_flag                         0.0000
+  acq_month                                0.0000

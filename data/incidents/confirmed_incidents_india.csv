@@ -1,0 +1,31 @@
+incident_id,name,date,lat,lon,state,facility_type,description,source
+IND-001,Vizag LG Polymers gas leak,2020-05-07,17.6868,83.2185,Andhra Pradesh,Chemical plant,Styrene gas leak at LG Polymers Visakhapatnam — 12 fatalities,Wikipedia/News
+IND-002,Bhopal gas tragedy commemoration site,2020-12-03,23.2599,77.4126,Madhya Pradesh,Chemical plant,Anniversary monitoring — Union Carbide / UCIL site (original 1984 incident site; ongoing thermal monitoring context),Wikipedia
+IND-003,HPCL Visakhapatnam refinery fire,2021-11-23,17.7201,83.3131,Andhra Pradesh,Refinery,Fire in crude unit at HPCL Visakhapatnam refinery,News archives
+IND-004,Sigachi Industries explosion Hyderabad,2021-10-04,17.4065,78.5480,Telangana,Pharmaceutical plant,Explosion at Sigachi Industries pharma plant Hyderabad — 44 fatalities,News/Wikipedia
+IND-005,IOCL Paradip refinery fire,2021-04-08,20.2961,86.6831,Odisha,Refinery,Fire at Indian Oil Corporation Paradip refinery,IOCL/News
+IND-006,BPCL Mumbai refinery fire,2022-01-08,18.9748,72.8570,Maharashtra,Refinery,Fire at Bharat Petroleum Mahul refinery Mumbai,News archives
+IND-007,Dhanbad coal mine explosion,2021-12-28,23.7957,86.4304,Jharkhand,Coal mine,Explosion at Bhowra colliery Dhanbad,DGMS/News
+IND-008,Surat textile fire,2019-05-24,21.1948,72.8170,Gujarat,Textile factory,Fire at Surat coaching centre/textile building — 20 fatalities,Wikipedia
+IND-009,Punjab paddy stubble burning cluster,2023-10-15,30.6942,76.8606,Punjab,Agricultural,Peak stubble burning season reference point — Ludhiana district,CPCB/NASA
+IND-010,Haryana stubble burning cluster,2023-11-01,29.9667,76.9167,Haryana,Agricultural,Peak stubble burning season — Karnal district,CPCB/NASA
+IND-011,ONGC Surat wellhead fire,2022-06-29,21.5500,72.9500,Gujarat,Oil wellhead,Fire at ONGC oil well near Surat,ONGC/News
+IND-012,Jharia coalfield thermal anomaly,2023-01-15,23.7800,86.4400,Jharkhand,Coal mine,Persistent underground coal fire — Jharia Dhanbad (chronic thermal source),BCCL/CPCB
+IND-013,Chennai Ennore thermal power flare,2022-08-10,13.2169,80.3197,Tamil Nadu,Thermal power plant,Stack flare event at NTPC North Chennai thermal power station,News
+IND-014,Numaligarh refinery fire,2020-08-17,26.6667,93.6333,Assam,Refinery,Fire at Numaligarh refinery Assam,NRL/News
+IND-015,Jamnagar Reliance refinery flare,2022-03-15,22.3900,70.0500,Gujarat,Refinery,Routine gas flare at Reliance Industries Jamnagar — world's largest refinery complex,Reliance/News
+IND-016,Haldia Petrochemicals fire,2020-11-11,22.0667,88.0667,West Bengal,Petrochemical plant,Fire at Haldia Petrochemicals Ltd,HPL/News
+IND-017,Vizag Steel Plant fire,2022-04-26,17.6868,83.2185,Andhra Pradesh,Steel plant,Fire at Rashtriya Ispat Nigam Vizag Steel Plant,RINL/News
+IND-018,Chittoor Nellore limestone kiln cluster,2023-02-01,14.4673,79.9871,Andhra Pradesh,Lime kiln,Persistent thermal sources — brick and lime kilns Nellore region,Remote sensing literature
+IND-019,Gujarat cement kiln Amreli,2023-03-10,21.6000,71.2167,Gujarat,Cement plant,Industrial cement kiln persistent thermal signature,OSM/Industrial surveys
+IND-020,Talcher thermal power station flare,2022-07-20,20.9500,85.2333,Odisha,Thermal power plant,Stack event / flare at NTPC Talcher Kaniha — 3000 MW plant,NTPC/News
+IND-021,ONGC Mumbai High offshore flare,2022-09-05,19.0667,71.5833,Maharashtra,Offshore oil platform,Gas flare at Mumbai High offshore platform (Arabian Sea),ONGC
+IND-022,Mundra ADANI power plant,2022-12-01,22.8400,69.6900,Gujarat,Thermal power plant,Persistent thermal signature at ADANI Mundra thermal power station (4620 MW),Satellite/ADANI
+IND-023,Korba NTPC coal plant,2023-01-10,22.3667,82.7333,Chhattisgarh,Thermal power plant,Persistent thermal source at NTPC Korba coal power station (2600 MW),NTPC
+IND-024,Vindhyachal NTPC,2023-02-15,24.1000,82.6667,Madhya Pradesh,Thermal power plant,Persistent thermal source at NTPC Vindhyachal (4760 MW — largest in India),NTPC
+IND-025,Taloja chemical zone fire,2021-09-22,19.0333,73.1333,Maharashtra,Chemical plant,Fire at MIDC Taloja industrial zone Navi Mumbai,News
+IND-026,IOCL Guwahati refinery fire,2022-10-14,26.1833,91.7667,Assam,Refinery,Fire at IOCL Guwahati refinery,IOCL/News
+IND-027,Angul NALCO aluminium smelter,2023-03-20,20.8333,85.1000,Odisha,Aluminium smelter,Persistent thermal signature at NALCO smelter Angul — potline thermal sources,NALCO
+IND-028,Bhilai Steel Plant flares,2023-04-01,21.2167,81.4333,Chhattisgarh,Steel plant,Blast furnace and coke oven persistent flares at SAIL Bhilai,SAIL
+IND-029,Odisha Rourkela steel plant,2023-05-10,22.2167,84.8667,Odisha,Steel plant,Persistent thermal source — SAIL Rourkela steel plant blast furnace,SAIL
+IND-030,Durgapur steel plant West Bengal,2023-06-15,23.5167,87.2667,West Bengal,Steel plant,Persistent thermal signature at SAIL DSP Durgapur,SAIL

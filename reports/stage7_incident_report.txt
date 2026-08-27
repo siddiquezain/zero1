@@ -1,0 +1,67 @@
+SIH26162 — Stage 7 Incident Scoring Report
+============================================================
+
+Context: thermal features (bt_kelvin, frp_mw, persistence_count,
+day_night_bin) are NaN — no historical FIRMS archive for 2019–2023.
+Model imputes NaN with training medians. Scoring is driven by
+dist_nearest_facility_km, agri_season_flag, acq_month.
+
+Total incidents: 30
+Anomaly-flagged (max_prob < 0.55): 21 (70.0%)
+
+Predicted label distribution:
+  {'B_candidate': 30}
+
+============================================================
+Per-incident scores:
+
+IND-001    Vizag LG Polymers gas leak                     pred=B_candidate  prob_A=0.479  prob_B=0.521  max=0.521  dist_fac=0.8km  *** ANOMALY ***
+IND-002    Bhopal gas tragedy commemoration site          pred=B_candidate  prob_A=0.454  prob_B=0.546  max=0.546  dist_fac=1.4km  *** ANOMALY ***
+IND-003    HPCL Visakhapatnam refinery fire               pred=B_candidate  prob_A=0.440  prob_B=0.560  max=0.560  dist_fac=1.9km  
+IND-004    Sigachi Industries explosion Hyderabad         pred=B_candidate  prob_A=0.454  prob_B=0.546  max=0.546  dist_fac=1.4km  *** ANOMALY ***
+IND-005    IOCL Paradip refinery fire                     pred=B_candidate  prob_A=0.472  prob_B=0.528  max=0.528  dist_fac=2.5km  *** ANOMALY ***
+IND-006    BPCL Mumbai refinery fire                      pred=B_candidate  prob_A=0.479  prob_B=0.521  max=0.521  dist_fac=0.5km  *** ANOMALY ***
+IND-007    Dhanbad coal mine explosion                    pred=B_candidate  prob_A=0.479  prob_B=0.521  max=0.521  dist_fac=0.8km  *** ANOMALY ***
+IND-008    Surat textile fire                             pred=B_candidate  prob_A=0.460  prob_B=0.540  max=0.540  dist_fac=1.1km  *** ANOMALY ***
+IND-009    Punjab paddy stubble burning cluster           pred=B_candidate  prob_A=0.423  prob_B=0.577  max=0.577  dist_fac=2.9km  
+IND-010    Haryana stubble burning cluster                pred=B_candidate  prob_A=0.440  prob_B=0.560  max=0.560  dist_fac=1.8km  
+IND-011    ONGC Surat wellhead fire                       pred=B_candidate  prob_A=0.385  prob_B=0.615  max=0.615  dist_fac=3.6km  
+IND-012    Jharia coalfield thermal anomaly               pred=B_candidate  prob_A=0.454  prob_B=0.546  max=0.546  dist_fac=1.3km  *** ANOMALY ***
+IND-013    Chennai Ennore thermal power flare             pred=B_candidate  prob_A=0.479  prob_B=0.521  max=0.521  dist_fac=0.2km  *** ANOMALY ***
+IND-014    Numaligarh refinery fire                       pred=B_candidate  prob_A=0.070  prob_B=0.930  max=0.930  dist_fac=8.5km  
+IND-015    Jamnagar Reliance refinery flare               pred=B_candidate  prob_A=0.479  prob_B=0.521  max=0.521  dist_fac=0.9km  *** ANOMALY ***
+IND-016    Haldia Petrochemicals fire                     pred=B_candidate  prob_A=0.479  prob_B=0.521  max=0.521  dist_fac=0.4km  *** ANOMALY ***
+IND-017    Vizag Steel Plant fire                         pred=B_candidate  prob_A=0.479  prob_B=0.521  max=0.521  dist_fac=0.8km  *** ANOMALY ***
+IND-018    Chittoor Nellore limestone kiln cluster        pred=B_candidate  prob_A=0.437  prob_B=0.563  max=0.563  dist_fac=1.5km  
+IND-019    Gujarat cement kiln Amreli                     pred=B_candidate  prob_A=0.440  prob_B=0.560  max=0.560  dist_fac=1.6km  
+IND-020    Talcher thermal power station flare            pred=B_candidate  prob_A=0.453  prob_B=0.547  max=0.547  dist_fac=2.6km  *** ANOMALY ***
+IND-021    ONGC Mumbai High offshore flare                pred=B_candidate  prob_A=0.000  prob_B=1.000  max=1.000  dist_fac=127.6km  
+IND-022    Mundra ADANI power plant                       pred=B_candidate  prob_A=0.454  prob_B=0.546  max=0.546  dist_fac=1.3km  *** ANOMALY ***
+IND-023    Korba NTPC coal plant                          pred=B_candidate  prob_A=0.454  prob_B=0.546  max=0.546  dist_fac=1.4km  *** ANOMALY ***
+IND-024    Vindhyachal NTPC                               pred=B_candidate  prob_A=0.479  prob_B=0.521  max=0.521  dist_fac=0.6km  *** ANOMALY ***
+IND-025    Taloja chemical zone fire                      pred=B_candidate  prob_A=0.452  prob_B=0.548  max=0.548  dist_fac=2.3km  *** ANOMALY ***
+IND-026    IOCL Guwahati refinery fire                    pred=B_candidate  prob_A=0.482  prob_B=0.518  max=0.518  dist_fac=2.5km  *** ANOMALY ***
+IND-027    Angul NALCO aluminium smelter                  pred=B_candidate  prob_A=0.430  prob_B=0.570  max=0.570  dist_fac=6.0km  
+IND-028    Bhilai Steel Plant flares                      pred=B_candidate  prob_A=0.472  prob_B=0.528  max=0.528  dist_fac=2.5km  *** ANOMALY ***
+IND-029    Odisha Rourkela steel plant                    pred=B_candidate  prob_A=0.454  prob_B=0.546  max=0.546  dist_fac=1.4km  *** ANOMALY ***
+IND-030    Durgapur steel plant West Bengal               pred=B_candidate  prob_A=0.479  prob_B=0.521  max=0.521  dist_fac=0.8km  *** ANOMALY ***
+
+============================================================
+Interpretation:
+
+Incidents predicted as ANOMALY (max_prob < 0.55) are hotspots
+that the model cannot confidently classify as either a persistent
+industrial flare (Class A) or a natural/agricultural fire (Class B).
+This is the expected outcome for transient industrial fires — they
+depart from both known pattern types.
+
+Incidents predicted as Class A: the incident site resembles a known
+gas flare site (near industrial facility, potentially nighttime).
+This is plausible for refineries / oil/gas facilities.
+
+Incidents predicted as Class B: the model sees an event pattern more
+consistent with a natural fire (low facility proximity or agri season).
+
+NOTE: Without historical FIRMS data, thermal features are imputed.
+Scores should be treated as baseline geographic context, not a definitive
+classification of the incident event itself.

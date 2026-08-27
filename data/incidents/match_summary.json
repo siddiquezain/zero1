@@ -1,0 +1,10 @@
+{
+  "total_incidents": 30,
+  "matched_yes": 0,
+  "matched_no": 30,
+  "match_rate_pct": 0.0,
+  "note": "Unmatched incidents are satellite-omission findings, NOT discarded rows. Both matched and unmatched are valid pipeline output.",
+  "spatial_buffer_km": 1.0,
+  "temporal_window_days": 1,
+  "run_utc": "2026-08-27T17:18:10.978169+00:00"
+}

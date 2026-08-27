@@ -1,0 +1,19 @@
+{
+  "description": "Normalised facility/context table",
+  "row_count": 72624,
+  "sources": {
+    "OSM": 37688,
+    "GPPD": 34936
+  },
+  "columns": [
+    "facility_id",
+    "lat",
+    "lon",
+    "facility_type",
+    "source",
+    "name",
+    "country"
+  ],
+  "note": "facility_proximity is a FEATURE only \u2014 not a label",
+  "_recorded_utc": "2026-08-27T15:53:23.463316+00:00"
+}
