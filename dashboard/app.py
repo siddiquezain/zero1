@@ -196,7 +196,7 @@ def _build_map(scored: pd.DataFrame, incidents: pd.DataFrame,
 
     if show_incidents and not incidents.empty:
         inc = incidents.copy()
-        inc["color"] = [255,255,255,230]
+        inc["color"] = [[255,255,255,230]] * len(inc)
         inc["tip"] = inc.apply(lambda r: (
             f"📌 {r['incident_id']}: {r['name']}\n"
             f"Date: {r['date']} | Facility: {r.get('facility_type','?')}\n"

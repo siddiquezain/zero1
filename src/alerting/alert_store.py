@@ -14,7 +14,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-DB_PATH = Path("data/alerts.db")
+DB_PATH = Path(__file__).parent.parent.parent / "data/alerts.db"
 
 LIFECYCLE_STATES = [
     "DETECTED",

@@ -18,8 +18,9 @@ from src.alerting import alert_store, risk_engine
 
 log = logging.getLogger(__name__)
 
-INDIA_SCORES_PATH = Path("data/processed/stage6_india_scores.parquet")
-INCIDENT_SCORES_PATH = Path("data/incidents/stage7_incident_scores.parquet")
+_ROOT = Path(__file__).parent.parent.parent
+INDIA_SCORES_PATH = _ROOT / "data/processed/stage6_india_scores.parquet"
+INCIDENT_SCORES_PATH = _ROOT / "data/incidents/stage7_incident_scores.parquet"
 
 
 def run(fresh: bool = False) -> dict:
