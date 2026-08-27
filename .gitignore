@@ -1,8 +1,13 @@
-# Large data files
+# Large data files — exclude raw downloads and intermediate outputs
 data/raw/
 data/processed/*.parquet
 data/incidents/*.parquet
 data/processed/*.joblib
+
+# Keep dashboard-required scored outputs (small)
+!data/processed/stage6_india_scores.parquet
+!data/incidents/stage7_incident_scores.parquet
+!data/processed/facilities.parquet
 
 # Keep metadata and scripts
 !data/**/*.json
