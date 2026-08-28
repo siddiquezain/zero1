@@ -516,11 +516,63 @@ label[data-testid="stWidgetLabel"] {
 
 /* === SECTION LABEL === */
 .sec-label {
-  font-size: 10px; font-weight: 600; letter-spacing: 0.12em;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.10em;
   text-transform: uppercase; color: var(--t1);
   padding-bottom: 10px; border-bottom: 1px solid var(--bd-1);
   margin-bottom: 14px;
 }
+
+/* === INTELLIGENCE HEADER (situation overview) === */
+.intel-bar {
+  padding: 8px 0 16px; border-bottom: 1px solid var(--bd-1);
+  margin-bottom: 18px;
+}
+.intel-primary {
+  display: flex; align-items: baseline; gap: 20px; margin-bottom: 6px;
+}
+.intel-count {
+  font-family: var(--mono); font-size: 36px; font-weight: 300;
+  letter-spacing: -0.04em; color: var(--t0); line-height: 1;
+}
+.intel-count-label {
+  font-size: 13px; color: var(--t1);
+}
+.intel-severity {
+  display: flex; gap: 20px; margin-bottom: 8px;
+}
+.intel-sev-item {
+  font-family: var(--mono); font-size: 13px; font-weight: 500;
+}
+.intel-sev-item span { font-size: 11px; color: var(--t1); margin-left: 4px; }
+.intel-classes {
+  display: flex; gap: 24px;
+  font-size: 12px; color: var(--t1);
+  border-top: 1px solid var(--bd-0); padding-top: 8px;
+}
+.intel-cls-item { display: flex; gap: 6px; align-items: center; }
+.intel-cls-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.intel-cls-val { font-family: var(--mono); font-size: 13px; color: var(--t0); }
+
+/* === EXPANDER (progressive disclosure in alert feed) === */
+[data-testid="stExpander"] {
+  border: none !important;
+  border-top: 1px solid var(--bd-0) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  margin: 0 !important;
+}
+[data-testid="stExpander"] summary {
+  font-family: var(--font) !important;
+  font-size: 11px !important;
+  color: var(--t1) !important;
+  padding: 4px 0 8px !important;
+  background: transparent !important;
+}
+[data-testid="stExpander"] summary:hover { color: var(--t0) !important; }
+[data-testid="stExpander"] > div > div { padding: 0 !important; }
+
+/* === POPOVER === */
+[data-testid="stPopover"] { font-family: var(--font) !important; }
 
 /* === GIS / TABLE / CODE === */
 [data-testid="stDataFrame"] { border-radius: var(--r) !important; }
@@ -548,8 +600,8 @@ label[data-testid="stWidgetLabel"] {
 }
 .ps-class-panel + .ps-class-panel { margin-top: 0; }
 .ps-class-head {
-  font-size: 8px; font-weight: 700; letter-spacing: 0.16em;
-  text-transform: uppercase; margin-bottom: 4px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.10em;
+  text-transform: uppercase; margin-bottom: 6px;
 }
 .ps-class-count {
   font-family: var(--mono); font-size: 28px; font-weight: 300;
@@ -595,31 +647,21 @@ def load_incidents():
 
 
 # ── Helper renderers ───────────────────────────────────────────────────────────
-def _alert_card(a: dict) -> str:
+def _alert_row_html(a: dict) -> str:
+    """Compact single-line alert row for the collapsed state."""
     sev       = a["severity"]
     status    = a.get("status", "")
     city      = a.get("nearest_city", "—")
     city_dist = a.get("dist_nearest_city_km", 0)
     frp       = a.get("frp_mw", 0)
     persist   = a.get("persistence_count", 1)
-    dist_fac  = a.get("dist_nearest_facility_km", 0)
-    haz       = a.get("hazard_facility_type", "—")
     risk      = a.get("risk_score", 0)
     acq       = a.get("acq_date", "")
-    day_night = a.get("day_night", "D")
     oc        = a.get("output_class", "")
-    narrative = a.get("narrative", "")
     lat       = a.get("lat", 0)
     lon       = a.get("lon", 0)
-    land      = a.get("land_cover_context", "—")
 
     type_label = _TYPE_SHORT.get(oc, oc)
-    dn_label   = "Night" if day_night == "N" else "Day"
-    narr_html  = (
-        f'<div class="ac-narr">{narrative}</div>'
-        if narrative else ""
-    )
-
     return f"""
 <div class="ac">
   <div class="ac-head">
@@ -632,14 +674,33 @@ def _alert_card(a: dict) -> str:
   </div>
   <div class="ac-loc">{lat:.4f}°N {lon:.4f}°E &nbsp;·&nbsp; {city} ({city_dist:.0f} km)</div>
   <div class="ac-metrics">
+    <span>Risk <em>{risk}</em>/100</span>
     <span>FRP <em>{frp:.1f}</em> MW</span>
     <span>Persist <em>{persist}</em>&times;</span>
-    <span>Risk <em>{risk}</em>/100</span>
-    <span>{haz} &nbsp;{dist_fac:.1f} km</span>
-    <span>{dn_label} &nbsp;&middot;&nbsp; {land}</span>
   </div>
-  {narr_html}
 </div>"""
+
+
+def _alert_detail_html(a: dict) -> str:
+    """Expanded detail block — narrative + secondary metrics."""
+    dist_fac  = a.get("dist_nearest_facility_km", 0)
+    haz       = a.get("hazard_facility_type", "—")
+    land      = a.get("land_cover_context", "—")
+    day_night = a.get("day_night", "D")
+    narrative = a.get("narrative", "")
+    dn_label  = "Night" if day_night == "N" else "Day"
+
+    detail_parts = []
+    if narrative:
+        detail_parts.append(f'<div class="ac-narr">{narrative}</div>')
+    detail_parts.append(
+        f'<div class="ac-metrics" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--bd-0)">'
+        f'<span>{haz} &nbsp;{dist_fac:.1f} km</span>'
+        f'<span>{dn_label}</span>'
+        f'<span>{land}</span>'
+        f'</div>'
+    )
+    return "".join(detail_parts)
 
 
 def _sev_section_head(sev: str, count: int) -> str:
@@ -754,7 +815,23 @@ _IST = timezone(timedelta(hours=5, minutes=30))
 now_str   = datetime.now(_IST).strftime("%H:%M IST")
 
 
-# ── System bar ─────────────────────────────────────────────────────────────────
+# ── Pre-compute counts ─────────────────────────────────────────────────────────
+n_industrial = (
+    int((scored_df["output_class"] == OUTPUT_CLASS_INDUSTRIAL_FIRE).sum())
+    if not scored_df.empty else 0
+)
+n_persistent = (
+    int((scored_df["output_class"] == OUTPUT_CLASS_PERSISTENT_SOURCE).sum())
+    if not scored_df.empty else 0
+)
+n_natural = (
+    int((scored_df["output_class"] == OUTPUT_CLASS_NATURAL_FIRE).sum())
+    if not scored_df.empty else 0
+)
+
+# ── Integrated header + situation overview ────────────────────────────────────
+_cr_color = "var(--cr)" if c["CRITICAL"] > 0 else "var(--t0)"
+_hi_color = "var(--hi)" if c["HIGH"] > 0 else "var(--t0)"
 st.markdown(f"""
 <div class="sys-bar">
   <div class="sys-bar-left">
@@ -770,54 +847,41 @@ st.markdown(f"""
     LIVE &nbsp;·&nbsp; {now_str} &nbsp;·&nbsp; NRT
   </div>
 </div>
-""", unsafe_allow_html=True)
-
-
-# ── Status strip ───────────────────────────────────────────────────────────────
-n_industrial = (
-    int((scored_df["output_class"] == OUTPUT_CLASS_INDUSTRIAL_FIRE).sum())
-    if not scored_df.empty else 0
-)
-n_persistent = (
-    int((scored_df["output_class"] == OUTPUT_CLASS_PERSISTENT_SOURCE).sum())
-    if not scored_df.empty else 0
-)
-n_natural = (
-    int((scored_df["output_class"] == OUTPUT_CLASS_NATURAL_FIRE).sum())
-    if not scored_df.empty else 0
-)
-
-cr_cls = "ss-val-cr" if c["CRITICAL"] > 0 else ""
-hi_cls = "ss-val-hi" if c["HIGH"] > 0 else ""
-
-st.markdown(f"""
-<div class="status-strip">
-  <div class="ss-item">
-    <div class="ss-label">Active Alerts</div>
-    <div class="ss-val">{c['active']}</div>
+<div class="intel-bar">
+  <div class="intel-primary">
+    <div class="intel-count">{c['active']}</div>
+    <div class="intel-count-label">active alerts requiring attention</div>
   </div>
-  <div class="ss-item">
-    <div class="ss-label">Critical</div>
-    <div class="ss-val {cr_cls}">{c['CRITICAL']}</div>
+  <div class="intel-severity">
+    <div class="intel-sev-item" style="color:{_cr_color}">
+      {c['CRITICAL']}<span>critical</span>
+    </div>
+    <div class="intel-sev-item" style="color:{_hi_color}">
+      {c['HIGH']}<span>high</span>
+    </div>
+    <div class="intel-sev-item" style="color:var(--me)">
+      {c['MEDIUM']}<span>medium</span>
+    </div>
+    <div class="intel-sev-item" style="color:var(--t1)">
+      {c['LOW']}<span>low</span>
+    </div>
   </div>
-  <div class="ss-item">
-    <div class="ss-label">High</div>
-    <div class="ss-val {hi_cls}">{c['HIGH']}</div>
-  </div>
-  <div class="ss-item">
-    <div class="ss-label">Industrial Fire</div>
-    <div class="ss-val">{n_industrial}</div>
-    <div class="ss-sub">PS Class A</div>
-  </div>
-  <div class="ss-item">
-    <div class="ss-label">Persistent Source</div>
-    <div class="ss-val">{n_persistent}</div>
-    <div class="ss-sub">PS Class B</div>
-  </div>
-  <div class="ss-item">
-    <div class="ss-label">Natural Fire</div>
-    <div class="ss-val">{n_natural}</div>
-    <div class="ss-sub">PS Class C</div>
+  <div class="intel-classes">
+    <div class="intel-cls-item">
+      <div class="intel-cls-dot" style="background:var(--cr)"></div>
+      <span class="intel-cls-val">{n_industrial}</span>
+      <span>Industrial Fire (PS·A)</span>
+    </div>
+    <div class="intel-cls-item">
+      <div class="intel-cls-dot" style="background:var(--hi)"></div>
+      <span class="intel-cls-val">{n_persistent}</span>
+      <span>Persistent Source (PS·B)</span>
+    </div>
+    <div class="intel-cls-item">
+      <div class="intel-cls-dot" style="background:var(--lo)"></div>
+      <span class="intel-cls-val">{n_natural}</span>
+      <span>Natural Fire (PS·C)</span>
+    </div>
   </div>
 </div>
 """, unsafe_allow_html=True)
@@ -843,39 +907,41 @@ with _cb2:
     )
 
 with _cb3:
-    st.markdown('<div class="ctrl-label">Date Filter</div>', unsafe_allow_html=True)
-    _db1, _db2, _db3, _db4 = st.columns(4)
-    if _db1.button("Today",  key="cb_q0", use_container_width=True):
+    st.markdown('<div class="ctrl-label">Date</div>', unsafe_allow_html=True)
+    _dq1, _dq2, _dq3, _dq4, _dq5 = st.columns(5)
+    if _dq1.button("Today", key="cb_q0", use_container_width=True):
         st.session_state.tl_start = date.today(); st.session_state.tl_end = date.today()
         st.session_state.alert_page = 0; st.rerun()
-    if _db2.button("24h",    key="cb_q1", use_container_width=True):
+    if _dq2.button("24h", key="cb_q1", use_container_width=True):
         st.session_state.tl_start = date.today() - timedelta(days=1)
         st.session_state.tl_end = date.today()
         st.session_state.alert_page = 0; st.rerun()
-    if _db3.button("7d",     key="cb_q2", use_container_width=True):
+    if _dq3.button("7d", key="cb_q2", use_container_width=True):
         st.session_state.tl_start = date.today() - timedelta(days=7)
         st.session_state.tl_end = date.today()
         st.session_state.alert_page = 0; st.rerun()
-    if _db4.button("Clear",  key="cb_q4", use_container_width=True,
+    if _dq4.button("Clear", key="cb_q4", use_container_width=True,
                    disabled=st.session_state.tl_start is None):
         st.session_state.tl_start = None; st.session_state.tl_end = None
         st.session_state.tl_playing = False; st.session_state.alert_page = 0; st.rerun()
-    if not daily_summary.empty:
-        with st.form("cb_date_form"):
-            _cb_dr = st.date_input(
-                "Range",
-                value=(st.session_state.tl_start or _sb_min_date,
-                       st.session_state.tl_end   or _sb_max_date),
-                min_value=_sb_min_date,
-                max_value=max(_sb_max_date, date.today()),
-                label_visibility="collapsed",
-            )
-            if st.form_submit_button("Apply", use_container_width=True):
-                if isinstance(_cb_dr, (list, tuple)) and len(_cb_dr) == 2:
-                    st.session_state.tl_start = _cb_dr[0]; st.session_state.tl_end = _cb_dr[1]
-                elif isinstance(_cb_dr, date):
-                    st.session_state.tl_start = _cb_dr; st.session_state.tl_end = _cb_dr
-                st.session_state.alert_page = 0; st.rerun()
+    with _dq5.popover("↗", use_container_width=True):
+        st.markdown("**Custom date range**")
+        if not daily_summary.empty:
+            with st.form("cb_date_form"):
+                _cb_dr = st.date_input(
+                    "Range",
+                    value=(st.session_state.tl_start or _sb_min_date,
+                           st.session_state.tl_end   or _sb_max_date),
+                    min_value=_sb_min_date,
+                    max_value=max(_sb_max_date, date.today()),
+                    label_visibility="collapsed",
+                )
+                if st.form_submit_button("Apply", use_container_width=True):
+                    if isinstance(_cb_dr, (list, tuple)) and len(_cb_dr) == 2:
+                        st.session_state.tl_start = _cb_dr[0]; st.session_state.tl_end = _cb_dr[1]
+                    elif isinstance(_cb_dr, date):
+                        st.session_state.tl_start = _cb_dr; st.session_state.tl_end = _cb_dr
+                    st.session_state.alert_page = 0; st.rerun()
     if st.session_state.tl_start:
         _active_rng = (
             st.session_state.tl_start.strftime("%b %d")
@@ -906,8 +972,7 @@ with _cb5:
         st.success(f"CRITICAL: {r['counts']['CRITICAL']}  HIGH: {r['counts']['HIGH']}")
         st.rerun()
 
-st.markdown('<div style="border-top:1px solid var(--bd-1);margin:8px 0 20px"></div>',
-            unsafe_allow_html=True)
+st.markdown('<div style="height:6px"></div>', unsafe_allow_html=True)
 
 
 # ── Apply timeline date filter ─────────────────────────────────────────────────
@@ -924,7 +989,7 @@ else:
 
 
 # ── Main layout: alert feed + map ─────────────────────────────────────────────
-col_alert, col_map = st.columns([1, 1.65], gap="medium")
+col_alert, col_map = st.columns([1, 2], gap="medium")
 
 # ── Alert feed ─────────────────────────────────────────────────────────────────
 _PAGE_SIZE = 5
@@ -973,21 +1038,28 @@ with col_alert:
         for a in _page_alerts:
             if a["severity"] != _cur_sev:
                 _cur_sev = a["severity"]
-                # count of this severity in full list for the section header
                 _sev_ct  = sum(1 for x in alerts if x["severity"] == _cur_sev)
                 st.markdown(_sev_section_head(_cur_sev, _sev_ct), unsafe_allow_html=True)
-            st.markdown(_alert_card(a), unsafe_allow_html=True)
-            if a["severity"] in ("CRITICAL", "HIGH") and a["status"] in ("ALERTED", "ESCALATED"):
-                _b1, _b2, _b3 = st.columns(3)
-                if _b1.button("Acknowledge", key=f"ack_{a['alert_id']}"):
-                    alert_store.update_status(a["alert_id"], "MONITORING")
-                    st.rerun()
-                if _b2.button("Escalate", key=f"esc_{a['alert_id']}"):
-                    alert_store.update_status(a["alert_id"], "ESCALATED")
-                    st.rerun()
-                if _b3.button("Resolve", key=f"res_{a['alert_id']}"):
-                    alert_store.update_status(a["alert_id"], "EXTINGUISHED")
-                    st.rerun()
+
+            # Collapsed row (always visible)
+            st.markdown(_alert_row_html(a), unsafe_allow_html=True)
+
+            # Expanded detail + actions via progressive disclosure
+            _has_actions = a["status"] in ("ALERTED", "ESCALATED")
+            _exp_label   = "Assessment + Actions" if _has_actions else "Assessment"
+            with st.expander(_exp_label):
+                st.markdown(_alert_detail_html(a), unsafe_allow_html=True)
+                if _has_actions:
+                    _b1, _b2, _b3 = st.columns(3)
+                    if _b1.button("Acknowledge", key=f"ack_{a['alert_id']}"):
+                        alert_store.update_status(a["alert_id"], "MONITORING")
+                        st.rerun()
+                    if _b2.button("Escalate", key=f"esc_{a['alert_id']}"):
+                        alert_store.update_status(a["alert_id"], "ESCALATED")
+                        st.rerun()
+                    if _b3.button("Resolve", key=f"res_{a['alert_id']}"):
+                        alert_store.update_status(a["alert_id"], "EXTINGUISHED")
+                        st.rerun()
 
         # Pagination controls
         if _n_pages > 1:
@@ -1043,7 +1115,7 @@ with col_map:
     st.pydeck_chart(
         _build_map(map_df, incidents_df, _show_inc_now, colour_by),
         use_container_width=True,
-        height=460,
+        height=520,
     )
 
     st.markdown("""

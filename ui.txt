@@ -1,0 +1,898 @@
+We are now entering a **complete UI/UX rebuild phase** for this project.
+
+The core product functionality is already almost complete. **Do NOT focus on adding new product features right now.** The objective is to transform the existing prototype into a **world-class, professional-grade interface suitable for the Smart India Hackathon (SIH) 2026 final presentation/demo.**
+
+This is an important competition prototype. The UI must NOT look AI-generated, template-based, generic SaaS, or like a student dashboard.
+
+I want a **premium, minimal, highly intentional, modern intelligence-platform aesthetic**.
+
+Think:
+
+* Professional emergency intelligence / satellite monitoring platform
+* Mission-control interface
+* Modern geospatial intelligence software
+* Premium data visualization product
+* Minimalism + information density
+* Excellent typography and spacing
+* Subtle motion
+* Strong visual hierarchy
+* Extremely polished details
+
+**ZERO AI SLOP.**
+
+---
+
+# IMPORTANT: READ THIS BEFORE TOUCHING CODE
+
+First, thoroughly inspect the entire existing project.
+
+Understand:
+
+* Current architecture
+* All pages/routes
+* Existing components
+* Current map implementation
+* Data flow
+* API/data fetching
+* Fire-event models
+* Historical timeline
+* Filters
+* Alerts
+* Statistics
+* Charts
+* Existing responsive behavior
+* Existing design tokens/styles
+* Existing animations
+* Dependencies
+* Reusable components
+
+Create a mental model of the product before modifying anything.
+
+**Do not break any existing functionality.**
+
+The UI rebuild must happen ON TOP of the existing working product.
+
+---
+
+# USE ALL RELEVANT INSTALLED SKILLS
+
+Before implementation, inspect the skills/tools available to you.
+
+Use all relevant installed design/UI skills, especially anything related to:
+
+* Impeccable / UI quality
+* Design critique
+* Design systems
+* Inspiration / reference-driven UI
+* Premium dashboard design
+* Animation and micro-interactions
+* Accessibility
+* Responsive design
+* Visual hierarchy
+* Typography
+* Component architecture
+
+If skills such as **Impeccable, Inspira UI, animation/motion skills, shadcn/ui, or other relevant UI/design skills** are installed/available in this environment, **actively use them where appropriate**.
+
+Do not blindly apply every library.
+
+Use the tools/skills as professional design references and implementation aids.
+
+---
+
+# PHASE 0 — DESIGN AUDIT
+
+Before changing the UI, audit the current application.
+
+Identify:
+
+### Visual problems
+
+* Inconsistent spacing
+* Weak typography
+* Poor hierarchy
+* Generic cards
+* Excessive borders
+* Excessive rounded corners
+* Bad shadows
+* Poor contrast
+* Unnecessary gradients
+* Generic icons
+* Visual clutter
+* Inconsistent colors
+* Inconsistent component sizes
+* Poor empty states
+* Weak loading states
+* Bad responsive behavior
+
+### Product problems
+
+Identify whether the current interface makes it immediately clear:
+
+1. What is happening?
+2. Where is it happening?
+3. How serious is it?
+4. What requires attention?
+5. What happened historically?
+6. What should the operator do next?
+
+Create a short internal design audit before implementation.
+
+---
+
+# PHASE 1 — CREATE A REAL DESIGN SYSTEM
+
+Do NOT redesign each page independently.
+
+First establish a coherent design system.
+
+Create/rework:
+
+* Color tokens
+* Typography scale
+* Spacing scale
+* Border radius system
+* Shadows/elevation
+* Surface hierarchy
+* Iconography rules
+* Button system
+* Input system
+* Badge system
+* Card system
+* Modal/dialog system
+* Tooltip system
+* Navigation system
+* Table system
+* Chart styles
+* Map overlays
+* Alert states
+* Loading states
+* Empty states
+
+Everything afterward must use this system.
+
+---
+
+# VISUAL DIRECTION
+
+The visual language should be:
+
+## Premium Minimalism
+
+Not:
+
+* Over-designed
+* Neon cyberpunk
+* Excessive glassmorphism
+* Gradient-heavy
+* Dark-mode-for-the-sake-of-dark-mode
+* Huge typography everywhere
+* Excessive animations
+* Excessive rounded cards
+* Dashboard template aesthetics
+
+Instead:
+
+* Restrained
+* Precise
+* Editorial
+* Technical
+* Calm
+* Data-first
+* High information clarity
+
+Every element should have a reason to exist.
+
+---
+
+# COLOR SYSTEM
+
+Build a restrained professional palette.
+
+The application concerns:
+
+🔥 fire
+🚨 alerts
+🛰️ satellite intelligence
+🗺️ geospatial monitoring
+📊 risk analysis
+
+Therefore the UI should have a neutral foundation with carefully controlled semantic colors.
+
+Use color primarily to communicate:
+
+* Severity
+* Risk
+* Status
+* Selected state
+* Important events
+
+Do NOT turn the entire interface red/orange because the subject is fire.
+
+Critical red should remain **rare and meaningful**.
+
+A critical alert should immediately attract attention precisely because the rest of the interface is restrained.
+
+---
+
+# TYPOGRAPHY
+
+Typography is extremely important.
+
+Use a modern professional typeface already available in the project or choose an appropriate modern UI font if necessary.
+
+Create a proper hierarchy:
+
+* Display
+* Page title
+* Section title
+* Body
+* Metadata
+* Labels
+* Numbers
+* Status text
+
+Large numbers/statistics should feel intentional rather than like generic dashboard cards.
+
+Pay particular attention to:
+
+* Letter spacing
+* Line height
+* Numeric typography
+* Font weights
+* Text density
+
+---
+
+# LAYOUT PHILOSOPHY
+
+Avoid the classic:
+
+```text
+Sidebar
+--------------------------------
+Card | Card | Card | Card
+--------------------------------
+Huge chart
+--------------------------------
+Another row of cards
+```
+
+That is generic dashboard UI.
+
+Instead, create a **spatial hierarchy**.
+
+The most important information should dominate the viewport.
+
+For the main monitoring screen, think in terms of:
+
+```text
+GLOBAL NAVIGATION
+
+┌──────────────────────────────────────────────┐
+│ SYSTEM STATUS / CONTEXT / TIME              │
+├──────────────────────────────────────────────┤
+│                                              │
+│              PRIMARY MAP                     │
+│                                              │
+│     High-value geospatial information        │
+│                                              │
+│        contextual intelligence               │
+│                                              │
+├──────────────────────┬───────────────────────┤
+│ ACTIVE INTELLIGENCE  │ RISK / ALERT SUMMARY │
+├──────────────────────┴───────────────────────┤
+│ TIMELINE / HISTORICAL CONTEXT                │
+└──────────────────────────────────────────────┘
+```
+
+But do NOT blindly follow this layout.
+
+Use your design judgment after inspecting the existing product.
+
+---
+
+# MAIN DASHBOARD / COMMAND CENTER
+
+The primary page should feel like the **control center of the entire system**.
+
+The user should immediately understand:
+
+### Current situation
+
+* Active fires
+* Critical events
+* Current risk
+* Last data update
+* Geographic context
+
+### Where
+
+The map should remain the visual centerpiece.
+
+### What needs attention
+
+Critical alerts and high-risk events should be visually prioritized.
+
+### What changed
+
+Historical timeline should provide temporal context.
+
+---
+
+# MAP UI
+
+The map is one of the most important components.
+
+Do NOT cover the map with dozens of floating cards.
+
+Keep map overlays extremely clean.
+
+Use:
+
+* Minimal controls
+* Elegant zoom controls
+* Clear layer controls
+* Refined markers
+* Clustering where necessary
+* Clean popovers
+* Severity-aware markers
+* Subtle hover states
+* Proper selected-state visualization
+
+Fire markers should visually communicate severity without becoming visual noise.
+
+A selected fire should have a sophisticated focus treatment.
+
+---
+
+# FIRE EVENT DETAILS
+
+When a user clicks a fire event, the information presentation should feel premium.
+
+Instead of a generic:
+
+```text
+Card
+Fire
+Location
+Confidence
+FRP
+Date
+```
+
+create a contextual intelligence panel.
+
+For example:
+
+```text
+FIRE EVENT
+
+CRITICAL
+
+[Location]
+
+Detected 14 min ago
+
+Confidence              94%
+Intensity                ...
+Persistence              ...
+Risk                     HIGH
+
+────────────────────────
+
+WHY THIS MATTERS
+
+...
+
+────────────────────────
+
+RECOMMENDED ACTION
+
+...
+```
+
+Only display information actually available from the dataset.
+
+Never fabricate metrics.
+
+---
+
+# ALERT SYSTEM UI
+
+Alerts are central to the product.
+
+Create a clear visual hierarchy:
+
+LOW
+MEDIUM
+HIGH
+CRITICAL
+
+Critical alerts should be unmistakable but not visually obnoxious.
+
+Use:
+
+* Severity indicators
+* Timestamp
+* Location
+* Confidence
+* Short explanation
+* Recommended action
+* Status
+
+Support alert lifecycle states where the existing functionality allows it:
+
+```text
+DETECTED
+↓
+VALIDATING
+↓
+ALERTED
+↓
+ESCALATED
+↓
+MONITORING
+↓
+RESOLVED
+```
+
+---
+
+# HISTORICAL TIMELINE
+
+The historical timeline already exists / is being implemented.
+
+Integrate it into the new design system.
+
+It should feel like a **professional satellite analysis timeline**, not a normal calendar widget.
+
+Important dates should be visually highlighted according to actual fire activity/severity.
+
+The relationship should be obvious:
+
+```text
+DATE
+ ↓
+FIRE ACTIVITY
+ ↓
+MAP
+ ↓
+RISK
+ ↓
+EVENT DETAILS
+```
+
+Playback controls should be elegant and unobtrusive.
+
+---
+
+# DATA VISUALIZATION
+
+Redesign charts from first principles.
+
+Do not use:
+
+* Default chart-library aesthetics
+* Huge legends
+* Random colors
+* Thick unnecessary borders
+* Excessive gridlines
+* Decorative charts
+
+Charts should communicate information immediately.
+
+Prioritize:
+
+* Clear axes
+* Strong hierarchy
+* Meaningful annotations
+* Subtle gridlines
+* Consistent semantic colors
+* Tooltips that actually help
+
+---
+
+# NAVIGATION
+
+Rebuild navigation professionally.
+
+It should communicate the information architecture clearly.
+
+Potential structure:
+
+```text
+OVERVIEW
+LIVE MONITOR
+HISTORICAL
+ALERTS
+ANALYTICS
+```
+
+Use whatever routes/features actually exist.
+
+Do not create fake pages merely for appearance.
+
+Navigation should include:
+
+* Active state
+* Hover state
+* Keyboard accessibility
+* Tooltips where useful
+* Responsive behavior
+
+---
+
+# MICRO-INTERACTIONS
+
+Motion should make the application feel alive, not animated for decoration.
+
+Use subtle animation for:
+
+* Page transitions
+* Panel appearance
+* Alert arrival
+* Map selection
+* Timeline movement
+* Hover states
+* Data refresh
+* Loading states
+* Number changes
+* Expand/collapse
+
+Prefer short, purposeful transitions.
+
+Avoid:
+
+* Bouncy everything
+* Excessive spring animations
+* Constant pulsing
+* Distracting background animations
+* Animation on every component
+
+If an animation does not improve comprehension, remove it.
+
+---
+
+# LOADING STATES
+
+Replace generic spinners wherever possible.
+
+Use:
+
+* Skeletons
+* Progressive loading
+* Contextual indicators
+* Subtle shimmer where appropriate
+
+Loading should preserve the layout so the interface doesn't jump.
+
+---
+
+# EMPTY STATES
+
+Every empty state should communicate:
+
+1. What is empty
+2. Why it may be empty
+3. What the user can do
+
+Avoid:
+
+```text
+No data.
+```
+
+Make them feel intentional and professional.
+
+---
+
+# ERROR STATES
+
+Design proper error states.
+
+For example:
+
+```text
+DATA SOURCE UNAVAILABLE
+
+We couldn't retrieve the latest fire detections.
+
+Last successful update
+14:32 IST
+
+[Retry]
+```
+
+Do not expose raw technical errors to the user.
+
+---
+
+# RESPONSIVE DESIGN
+
+The application must work professionally on:
+
+* Desktop
+* Laptop
+* Tablet
+* Mobile
+
+Do not simply stack everything vertically.
+
+Think carefully about what information remains essential at smaller sizes.
+
+The map, alerts, timeline and event details must remain usable.
+
+---
+
+# ACCESSIBILITY
+
+Maintain professional accessibility standards:
+
+* Keyboard navigation
+* Focus states
+* Sufficient contrast
+* Semantic HTML
+* ARIA where appropriate
+* Reduced-motion support
+* Clear interactive states
+* Screen-reader-friendly labels
+
+---
+
+# COMPONENT ARCHITECTURE
+
+Create reusable components.
+
+For example:
+
+```text
+/components
+  /ui
+  /navigation
+  /map
+  /alerts
+  /timeline
+  /analytics
+  /fire-events
+  /charts
+  /layout
+```
+
+Avoid giant monolithic page components.
+
+Avoid duplicated styling.
+
+Create components that represent meaningful product concepts.
+
+---
+
+# IMPORTANT: DO NOT OVERUSE CARDS
+
+One of the biggest sources of AI-generated UI is putting everything inside rounded cards.
+
+Avoid:
+
+```text
+╭────────────╮
+│   CARD     │
+╰────────────╯
+```
+
+everywhere.
+
+Use:
+
+* Sections
+* Dividers
+* Typography
+* Whitespace
+* Panels
+* Tables
+* Inline metadata
+* Overlays
+
+Cards should be used when grouping information genuinely benefits comprehension.
+
+---
+
+# VISUAL REFERENCES
+
+Before implementing major screens, inspect high-quality references for:
+
+* Geospatial intelligence dashboards
+* Satellite monitoring systems
+* Emergency response interfaces
+* NASA/FIRMS-style data visualization
+* Bloomberg/Palantir-style information density
+* Modern aviation/maritime monitoring interfaces
+* Premium enterprise intelligence products
+
+Use these for **design principles and interaction patterns**, not for copying.
+
+The result must still have its own visual identity.
+
+---
+
+# IMPLEMENTATION ORDER
+
+Do this systematically.
+
+### Step 1
+
+Audit current application.
+
+### Step 2
+
+Create design tokens/system.
+
+### Step 3
+
+Rebuild global typography and spacing.
+
+### Step 4
+
+Rebuild navigation/layout shell.
+
+### Step 5
+
+Rebuild primary monitoring/dashboard screen.
+
+### Step 6
+
+Rebuild map UI.
+
+### Step 7
+
+Rebuild fire-event details.
+
+### Step 8
+
+Rebuild alert interface.
+
+### Step 9
+
+Rebuild timeline/historical interface.
+
+### Step 10
+
+Rebuild analytics/data visualization.
+
+### Step 11
+
+Rebuild loading/empty/error states.
+
+### Step 12
+
+Responsive pass.
+
+### Step 13
+
+Accessibility pass.
+
+### Step 14
+
+Animation/micro-interaction pass.
+
+### Step 15
+
+Final visual polish.
+
+---
+
+# CRITICAL RULE: ITERATIVE IMPLEMENTATION
+
+Do NOT attempt to blindly rewrite the entire application in one huge change.
+
+Work screen-by-screen.
+
+After each major screen:
+
+1. Run the application.
+2. Inspect the result.
+3. Compare against the intended visual direction.
+4. Fix spacing/alignment/typography.
+5. Check responsive behavior.
+6. Check that functionality still works.
+7. Continue to the next screen.
+
+If visual inspection/browser tooling is available, **use it extensively**.
+
+---
+
+# AI-SLOP DETECTION CHECK
+
+Before considering the redesign complete, critically inspect the UI and ask:
+
+### Does this look like a generic AI-generated dashboard?
+
+If YES → redesign it.
+
+Specifically look for:
+
+* Too many cards
+* Too many gradients
+* Excessive rounded corners
+* Excessive glassmorphism
+* Generic purple/blue gradients
+* Random accent colors
+* Huge meaningless numbers
+* Excessive shadows
+* Decorative icons
+* Excessive badges
+* Excessive animations
+* Inconsistent spacing
+* Generic dashboard layouts
+* Components that don't feel intentionally designed
+
+Remove them.
+
+---
+
+# FINAL QUALITY BAR
+
+The final product should feel like something that could plausibly be shown to:
+
+* Government officials
+* Disaster-management authorities
+* ISRO/NRSA/NASA-adjacent technical audiences
+* Enterprise customers
+* SIH judges
+* Professional engineering teams
+
+It should communicate:
+
+**“This is a serious operational intelligence platform.”**
+
+not:
+
+**“This is a student project with a nice UI.”**
+
+The UI should be attractive enough to impress judges within the first **5–10 seconds**, but restrained enough that technical users can actually operate it.
+
+---
+
+# DO NOT CHANGE PRODUCT LOGIC
+
+Unless absolutely necessary for UI integration:
+
+* Do not rewrite APIs
+* Do not change database schemas
+* Do not change detection algorithms
+* Do not change existing fire data
+* Do not remove historical functionality
+* Do not remove alert functionality
+* Do not replace working components purely for novelty
+
+If you encounter a functional problem, document it and fix only what is necessary.
+
+The current priority is:
+
+**EXISTING FUNCTIONAL PRODUCT → EXCEPTIONALLY POLISHED PRODUCT EXPERIENCE**
+
+---
+
+# DEFINITION OF DONE
+
+The redesign is complete only when:
+
+* The entire interface follows one coherent design system.
+* No screen feels like a separate template.
+* Typography is consistent.
+* Spacing is consistent.
+* Severity colors are meaningful.
+* The map is visually dominant where appropriate.
+* Historical analysis feels integrated.
+* Alerts feel operational.
+* Charts feel professional.
+* Animations are subtle and purposeful.
+* Responsive behavior is polished.
+* Loading/empty/error states are designed.
+* Accessibility is considered.
+* Existing functionality still works.
+* There is no obvious AI-generated/template aesthetic.
+* The overall product feels premium, minimal, technical and credible.
+
+**Do not rush. Quality matters more than speed.**
+
+Start with the **full audit and design-system foundation first**. Do not immediately start randomly editing components.
