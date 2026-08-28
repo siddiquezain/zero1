@@ -400,70 +400,97 @@ label[data-testid="stWidgetLabel"] {
 
 /* === TIMELINE === */
 .tl-section {
-  font-size: 8px; font-weight: 600; letter-spacing: 0.18em;
-  text-transform: uppercase; color: var(--t2);
+  font-size: 11px; font-weight: 600; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--t1);
   padding-bottom: 10px; border-bottom: 1px solid var(--bd-1);
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .tl-strip-wrap {
-  display: flex; gap: 4px; margin-bottom: 18px; overflow-x: auto;
+  display: flex; gap: 5px; margin-bottom: 14px; overflow-x: auto;
   padding-bottom: 4px;
 }
 .tl-day-block {
-  flex-shrink: 0; width: 54px; padding: 7px 4px 6px;
+  flex-shrink: 0; width: 62px; padding: 9px 6px 8px;
   border-radius: var(--r); text-align: center; cursor: pointer;
   border: 1px solid transparent;
-  transition: filter 0.1s;
+  transition: filter 0.12s;
 }
 .tl-day-block:hover { filter: brightness(1.25); }
-.tl-day-n  { font-family: var(--mono); font-size: 14px; font-weight: 400; line-height: 1; }
-.tl-day-d  { font-size: 8px; letter-spacing: 0.08em; text-transform: uppercase; margin-top: 3px; opacity: 0.6; }
-.tl-day-ct { font-size: 8px; font-family: var(--mono); margin-top: 3px; opacity: 0.5; }
+.tl-day-n  { font-family: var(--mono); font-size: 16px; font-weight: 400; line-height: 1; }
+.tl-day-d  { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; margin-top: 4px; opacity: 0.7; }
+.tl-day-ct { font-size: 10px; font-family: var(--mono); margin-top: 3px; opacity: 0.55; }
 
 .tl-CRITICAL { background: var(--cr-a); border-color: var(--cr-b); color: var(--cr); }
 .tl-HIGH     { background: var(--hi-a); border-color: var(--hi-b); color: var(--hi); }
 .tl-MODERATE { background: var(--me-a); border-color: var(--me-b); color: var(--me); }
 .tl-LOW      { background: var(--lo-a); border-color: var(--lo-b); color: var(--lo); }
-.tl-selected { outline: 1px solid rgba(255,255,255,0.3); outline-offset: 2px; }
+.tl-selected { outline: 2px solid rgba(255,255,255,0.3); outline-offset: 2px; }
 
 /* Calendar */
-.tl-cal { border-collapse: separate; border-spacing: 2px; }
+.tl-cal-wrap { display: flex; justify-content: center; }
+.tl-cal { border-collapse: separate; border-spacing: 3px; margin: 0 auto; }
 .tl-cal th {
-  color: var(--t2); font-size: 8px; font-weight: 600;
-  letter-spacing: 0.12em; text-transform: uppercase;
-  padding: 4px 6px; text-align: center;
+  color: var(--t1); font-size: 10px; font-weight: 600;
+  letter-spacing: 0.10em; text-transform: uppercase;
+  padding: 6px 8px; text-align: center;
 }
 .tl-cal td {
-  width: 40px; height: 38px; text-align: center; border-radius: var(--r);
-  font-size: 11px; font-family: var(--mono); vertical-align: middle;
+  width: 46px; height: 44px; text-align: center; border-radius: var(--r);
+  font-size: 13px; font-family: var(--mono); vertical-align: middle;
   cursor: default; transition: filter 0.1s;
 }
 .tl-cal td:hover { filter: brightness(1.3); }
 .tl-cal-none { color: var(--t2); }
-.tl-cal-sel  { outline: 1px solid rgba(255,255,255,0.25); outline-offset: 1px; }
+.tl-cal-sel  { outline: 2px solid rgba(255,255,255,0.3); outline-offset: 1px; }
+
+/* Calendar month header */
+.tl-cal-month {
+  text-align: center; font-size: 14px; font-weight: 600;
+  color: var(--t0); margin-bottom: 14px; letter-spacing: -0.01em;
+  font-family: var(--font);
+}
+
+/* Severity legend */
+.tl-legend {
+  display: flex; gap: 20px; flex-wrap: wrap; margin-top: 14px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+}
+.tl-legend-item { display: flex; align-items: center; gap: 6px; }
+.tl-legend-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
 
 /* Stat blocks for timeline */
 .tl-stats {
-  display: flex; gap: 0; margin-bottom: 18px;
-  border: 1px solid var(--bd-1); border-radius: var(--r); overflow: hidden;
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 1px; background: var(--bd-1);
+  border: 1px solid var(--bd-1); border-radius: var(--r);
+  overflow: hidden; margin-bottom: 20px;
 }
 .tl-stat {
-  flex: 1; padding: 12px 14px; border-right: 1px solid var(--bd-0);
+  padding: 16px 18px; background: var(--bg-1);
 }
-.tl-stat:last-child { border-right: none; }
 .tl-stat-label {
-  font-size: 8px; font-weight: 600; letter-spacing: 0.14em;
-  text-transform: uppercase; color: var(--t2); margin-bottom: 5px;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--t1); margin-bottom: 8px;
 }
 .tl-stat-val {
-  font-family: var(--mono); font-size: 18px; font-weight: 400;
-  color: var(--t0); letter-spacing: -0.02em;
+  font-family: var(--mono); font-size: 26px; font-weight: 300;
+  color: var(--t0); letter-spacing: -0.03em; line-height: 1;
+}
+.tl-stat-unit {
+  font-size: 12px; color: var(--t2); font-family: var(--mono);
+  margin-left: 3px;
 }
 .tl-stat-val-cr { color: var(--cr); }
+.tl-stat-sub {
+  font-size: 11px; color: var(--t1); margin-top: 4px;
+  font-family: var(--mono);
+}
 
 .tl-alert-panel {
-  padding: 10px 14px; border-radius: var(--r); margin-bottom: 14px;
+  padding: 14px 18px; border-radius: var(--r); margin-bottom: 18px;
 }
 .tl-alert-cr {
   background: var(--cr-a); border: 1px solid var(--cr-b);
@@ -472,12 +499,12 @@ label[data-testid="stWidgetLabel"] {
   background: var(--hi-a); border: 1px solid var(--hi-b);
 }
 .tl-alert-head {
-  font-size: 8px; font-weight: 700; letter-spacing: 0.14em;
-  text-transform: uppercase; margin-bottom: 3px;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; margin-bottom: 6px;
 }
 .tl-alert-cr .tl-alert-head { color: var(--cr); }
 .tl-alert-hi .tl-alert-head { color: var(--hi); }
-.tl-alert-body { font-size: 10px; color: var(--t1); }
+.tl-alert-body { font-size: 13px; color: var(--t1); line-height: 1.5; }
 
 /* Playback */
 .tl-play-state {
@@ -1063,9 +1090,9 @@ with tab_tl:
 
         # Playback controls (date filter is in the sidebar)
         st.markdown(
-            '<div style="font-size:10px;color:var(--t1);margin-bottom:10px">'
-            'Use the <b style="color:var(--t0)">Date Filter</b> in the sidebar '
-            'to filter the map and alerts by date range.</div>',
+            '<div style="font-size:12px;color:var(--t1);margin-bottom:12px">'
+            'Use the <b style="color:var(--t0)">Date Filter</b> above to filter '
+            'the map and alerts by date range. Click a day below to jump to it.</div>',
             unsafe_allow_html=True,
         )
         _playing = st.session_state.tl_playing
@@ -1150,132 +1177,148 @@ with tab_tl:
                     st.session_state.tl_playing = False
                     st.rerun()
 
-        st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
+        st.markdown('<div style="height:10px"></div>', unsafe_allow_html=True)
 
-        # Calendar
-        st.markdown('<div class="tl-section">Calendar View</div>', unsafe_allow_html=True)
-        _cal_month = st.session_state.tl_start or _max_date
-        _sel_s = st.session_state.tl_start
-        _sel_e = st.session_state.tl_end
+        # ── Two-column layout: Calendar | Period Analysis ──────────────────────
+        _col_cal, _col_stats = st.columns([1.1, 1.6], gap="large")
 
-        _cal_html = (
-            f'<div style="font-family:var(--mono)">'
-            f'<div style="text-align:center;font-size:11px;font-weight:500;'
-            f'color:var(--t0);margin-bottom:10px;font-family:var(--font);'
-            f'letter-spacing:-0.01em">{_cal_month.strftime("%B %Y")}</div>'
-            f'<table class="tl-cal"><tr>'
-            f'{"".join(f"<th>{d}</th>" for d in ["Mo","Tu","We","Th","Fr","Sa","Su"])}'
-            f'</tr>'
-        )
-        for _week in _cal.monthcalendar(_cal_month.year, _cal_month.month):
-            _cal_html += "<tr>"
-            for _day in _week:
-                if _day == 0:
-                    _cal_html += '<td class="tl-cal-none"></td>'
-                else:
-                    _d_str = f"{_cal_month.year}-{_cal_month.month:02d}-{_day:02d}"
-                    _rd    = _data_by_date.get(_d_str)
-                    _d_obj = date.fromisoformat(_d_str)
-                    _is_sel = (
-                        _sel_s and _sel_e and
-                        _sel_s <= _d_obj <= _sel_e
-                    )
-                    _sel_cls = " tl-cal-sel" if _is_sel else ""
-                    if _rd:
-                        _sv = _rd["severity_label"]
-                        _tip_txt = (
-                            f"{_d_str} | {_rd['total_detections']} detections "
-                            f"| {_rd['critical_events']} critical "
-                            f"| max FRP {_rd['max_frp']} MW"
-                        )
-                        _cal_html += (
-                            f'<td class="tl-{_sv}{_sel_cls}" title="{_tip_txt}">'
-                            f'{_day}</td>'
-                        )
+        with _col_cal:
+            st.markdown('<div class="tl-section">Calendar View</div>', unsafe_allow_html=True)
+            _cal_month = st.session_state.tl_start or _max_date
+            _sel_s = st.session_state.tl_start
+            _sel_e = st.session_state.tl_end
+
+            _cal_html = (
+                f'<div class="tl-cal-wrap"><div>'
+                f'<div class="tl-cal-month">{_cal_month.strftime("%B %Y")}</div>'
+                f'<table class="tl-cal"><tr>'
+                f'{"".join(f"<th>{d}</th>" for d in ["Mo","Tu","We","Th","Fr","Sa","Su"])}'
+                f'</tr>'
+            )
+            for _week in _cal.monthcalendar(_cal_month.year, _cal_month.month):
+                _cal_html += "<tr>"
+                for _day in _week:
+                    if _day == 0:
+                        _cal_html += '<td class="tl-cal-none"></td>'
                     else:
-                        _cal_html += (
-                            f'<td class="tl-cal-none{_sel_cls}">{_day}</td>'
-                        )
-            _cal_html += "</tr>"
-        _cal_html += "</table></div>"
-        st.markdown(_cal_html, unsafe_allow_html=True)
+                        _d_str = f"{_cal_month.year}-{_cal_month.month:02d}-{_day:02d}"
+                        _rd    = _data_by_date.get(_d_str)
+                        _d_obj = date.fromisoformat(_d_str)
+                        _is_sel = (_sel_s and _sel_e and _sel_s <= _d_obj <= _sel_e)
+                        _sel_cls = " tl-cal-sel" if _is_sel else ""
+                        if _rd:
+                            _sv = _rd["severity_label"]
+                            _tip_txt = (
+                                f"{_d_str} | {_rd['total_detections']} detections "
+                                f"| {_rd['critical_events']} critical "
+                                f"| max FRP {_rd['max_frp']} MW"
+                            )
+                            _cal_html += (
+                                f'<td class="tl-{_sv}{_sel_cls}" title="{_tip_txt}">'
+                                f'{_day}</td>'
+                            )
+                        else:
+                            _cal_html += f'<td class="tl-cal-none{_sel_cls}">{_day}</td>'
+                _cal_html += "</tr>"
+            _cal_html += "</table></div></div>"
+            st.markdown(_cal_html, unsafe_allow_html=True)
 
-        # Severity legend
-        st.markdown("""
-<div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:10px;font-size:9px;
-            font-weight:600;letter-spacing:0.1em;text-transform:uppercase">
-  <span style="color:var(--cr)">CRITICAL &ge;65</span>
-  <span style="color:var(--hi)">HIGH &ge;40</span>
-  <span style="color:var(--me)">MODERATE &ge;20</span>
-  <span style="color:var(--lo)">LOW &lt;20</span>
-  <span style="color:var(--t2)">risk score threshold</span>
+            # Severity legend
+            st.markdown("""
+<div class="tl-legend" style="margin-top:16px">
+  <div class="tl-legend-item">
+    <div class="tl-legend-dot" style="background:var(--cr)"></div>
+    <span style="color:var(--cr)">Critical &ge;65</span>
+  </div>
+  <div class="tl-legend-item">
+    <div class="tl-legend-dot" style="background:var(--hi)"></div>
+    <span style="color:var(--hi)">High &ge;40</span>
+  </div>
+  <div class="tl-legend-item">
+    <div class="tl-legend-dot" style="background:var(--me)"></div>
+    <span style="color:var(--me)">Moderate &ge;20</span>
+  </div>
+  <div class="tl-legend-item">
+    <div class="tl-legend-dot" style="background:var(--lo)"></div>
+    <span style="color:var(--lo)">Low &lt;20</span>
+  </div>
 </div>
+<div style="font-size:10px;color:var(--t2);margin-top:6px">Risk score threshold</div>
 """, unsafe_allow_html=True)
 
-        st.markdown('<div style="height:12px"></div>', unsafe_allow_html=True)
-
-        # Selected range statistics
-        _tl_start_val = st.session_state.tl_start
-        _tl_end_val   = st.session_state.tl_end
-        if _tl_start_val and _tl_end_val:
-            _range_events = get_events_for_range(_tl_start_val, _tl_end_val)
-            _range_str = (
-                _tl_start_val.strftime("%B %d, %Y") if _tl_start_val == _tl_end_val
-                else f"{_tl_start_val.strftime('%B %d')} – {_tl_end_val.strftime('%B %d, %Y')}"
-            )
-            st.markdown(
-                f'<div class="tl-section">Period Analysis &nbsp;·&nbsp; {_range_str}</div>',
-                unsafe_allow_html=True,
-            )
-
-            if not _range_events:
+        with _col_stats:
+            # Selected range statistics
+            _tl_start_val = st.session_state.tl_start
+            _tl_end_val   = st.session_state.tl_end
+            if not _tl_start_val or not _tl_end_val:
                 st.markdown(
-                    '<div style="padding:20px 0;font-size:11px;color:var(--t2)">'
-                    'No fire detections recorded for this period.<br>'
-                    'Try selecting a date that has data in the calendar above.'
+                    '<div style="padding:32px 0;font-size:12px;color:var(--t2);line-height:1.8">'
+                    'Select a date or date range from the calendar<br>'
+                    'or use the Date Filter above to see period analysis.'
                     '</div>',
                     unsafe_allow_html=True,
                 )
             else:
-                _rev_df     = pd.DataFrame(_range_events)
-                _n_total    = len(_rev_df)
-                _n_highconf = int((_rev_df["severity"].isin(["CRITICAL", "HIGH"])).sum())
-                _n_critical = int((_rev_df["severity"] == "CRITICAL").sum())
-                _avg_frp    = _rev_df["frp_mw"].mean()
-                _max_frp    = _rev_df["frp_mw"].max()
-                _day_sev    = (
-                    "CRITICAL" if _n_critical
-                    else "HIGH" if _n_highconf
-                    else "MODERATE" if _n_total
-                    else "LOW"
+                _range_events = get_events_for_range(_tl_start_val, _tl_end_val)
+                _range_str = (
+                    _tl_start_val.strftime("%B %d, %Y") if _tl_start_val == _tl_end_val
+                    else f"{_tl_start_val.strftime('%B %d')} – {_tl_end_val.strftime('%B %d, %Y')}"
+                )
+                st.markdown(
+                    f'<div class="tl-section">Period Analysis &nbsp;·&nbsp; {_range_str}</div>',
+                    unsafe_allow_html=True,
                 )
 
-                # Alert banner
-                if _n_critical > 0:
+                if not _range_events:
                     st.markdown(
-                        f'<div class="tl-alert-panel tl-alert-cr">'
-                        f'<div class="tl-alert-head">Critical fire activity — {_range_str}</div>'
-                        f'<div class="tl-alert-body">'
-                        f'{_n_critical} critical events &nbsp;·&nbsp; '
-                        f'{_n_highconf} high-confidence detections'
-                        f'</div></div>',
+                        '<div style="padding:20px 0;font-size:12px;color:var(--t2);line-height:1.8">'
+                        'No fire detections recorded for this period.<br>'
+                        'Try selecting a date that has data in the calendar.'
+                        '</div>',
                         unsafe_allow_html=True,
                     )
-                elif _n_highconf > 0:
-                    st.markdown(
-                        f'<div class="tl-alert-panel tl-alert-hi">'
-                        f'<div class="tl-alert-head">High fire activity — {_range_str}</div>'
-                        f'<div class="tl-alert-body">'
-                        f'{_n_highconf} high-confidence detections'
-                        f'</div></div>',
-                        unsafe_allow_html=True,
+                else:
+                    _rev_df     = pd.DataFrame(_range_events)
+                    _n_total    = len(_rev_df)
+                    _n_highconf = int((_rev_df["severity"].isin(["CRITICAL", "HIGH"])).sum())
+                    _n_critical = int((_rev_df["severity"] == "CRITICAL").sum())
+                    _avg_frp    = _rev_df["frp_mw"].mean()
+                    _max_frp    = _rev_df["frp_mw"].max()
+                    _day_sev    = (
+                        "CRITICAL" if _n_critical
+                        else "HIGH" if _n_highconf
+                        else "MODERATE" if _n_total
+                        else "LOW"
                     )
+                    _sev_color  = {"CRITICAL": "var(--cr)", "HIGH": "var(--hi)",
+                                   "MODERATE": "var(--me)", "LOW": "var(--lo)"}[_day_sev]
 
-                # Stats grid
-                cr_v      = "tl-stat-val-cr" if _n_critical > 0 else ""
-                _avg_str  = f"{_avg_frp:.1f}" if _n_total else "—"
-                _max_str  = f"{_max_frp:.1f}" if _n_total else "—"
-                st.markdown(f"""
+                    # Alert banner
+                    if _n_critical > 0:
+                        st.markdown(
+                            f'<div class="tl-alert-panel tl-alert-cr">'
+                            f'<div class="tl-alert-head">Critical fire activity</div>'
+                            f'<div class="tl-alert-body">'
+                            f'{_n_critical} critical events &nbsp;·&nbsp; '
+                            f'{_n_highconf} high-confidence detections'
+                            f'</div></div>',
+                            unsafe_allow_html=True,
+                        )
+                    elif _n_highconf > 0:
+                        st.markdown(
+                            f'<div class="tl-alert-panel tl-alert-hi">'
+                            f'<div class="tl-alert-head">High fire activity</div>'
+                            f'<div class="tl-alert-body">'
+                            f'{_n_highconf} high-confidence detections'
+                            f'</div></div>',
+                            unsafe_allow_html=True,
+                        )
+
+                    # Stats grid (3×2)
+                    cr_v     = "tl-stat-val-cr" if _n_critical > 0 else ""
+                    _avg_str = f"{_avg_frp:.1f}" if _n_total else "—"
+                    _max_str = f"{_max_frp:.1f}" if _n_total else "—"
+                    st.markdown(f"""
 <div class="tl-stats">
   <div class="tl-stat">
     <div class="tl-stat-label">Detections</div>
@@ -1291,30 +1334,32 @@ with tab_tl:
   </div>
   <div class="tl-stat">
     <div class="tl-stat-label">Avg FRP</div>
-    <div class="tl-stat-val">{_avg_str} <span style="font-size:11px;color:var(--t2)">MW</span></div>
+    <div class="tl-stat-val">{_avg_str}<span class="tl-stat-unit">MW</span></div>
   </div>
   <div class="tl-stat">
     <div class="tl-stat-label">Max FRP</div>
-    <div class="tl-stat-val">{_max_str} <span style="font-size:11px;color:var(--t2)">MW</span></div>
+    <div class="tl-stat-val">{_max_str}<span class="tl-stat-unit">MW</span></div>
   </div>
   <div class="tl-stat">
     <div class="tl-stat-label">Risk Level</div>
-    <div class="tl-stat-val" style="font-size:13px;font-weight:500">{_day_sev}</div>
+    <div class="tl-stat-val" style="font-size:18px;font-weight:600;color:{_sev_color}">{_day_sev}</div>
   </div>
 </div>
 """, unsafe_allow_html=True)
 
-                if _n_total:
-                    _areas = _rev_df["land_cover_context"].value_counts().head(3)
-                    _area_str = " &nbsp;·&nbsp; ".join(
-                        f"{z} ({n})" for z, n in _areas.items()
-                    )
-                    st.markdown(
-                        f'<div style="font-size:9px;color:var(--t2);margin-top:4px">'
-                        f'Top affected land cover: {_area_str}'
-                        f'</div>',
-                        unsafe_allow_html=True,
-                    )
+                    if _n_total:
+                        _areas = _rev_df["land_cover_context"].value_counts().head(3)
+                        _area_str = " &nbsp;·&nbsp; ".join(
+                            f"{z} ({n})" for z, n in _areas.items()
+                        )
+                        st.markdown(
+                            f'<div style="font-size:11px;color:var(--t1);margin-top:4px;line-height:1.7">'
+                            f'<span style="color:var(--t2);font-size:10px;letter-spacing:0.08em;'
+                            f'text-transform:uppercase">Top land cover</span><br>'
+                            f'{_area_str}'
+                            f'</div>',
+                            unsafe_allow_html=True,
+                        )
 
 
 # ────────────────────────────────────────────────────────────────────────────────
