@@ -437,27 +437,24 @@ with tab_timeline:
             st.session_state.tl_playing = False
             st.rerun()
 
-        # ── Date range picker ────────────────────────────────────────────────
-        _dr_default = (
-            st.session_state.tl_start or _min_date,
-            st.session_state.tl_end   or _max_date,
-        )
-        _dr = st.date_input(
-            "Select date or date range",
-            value=_dr_default,
-            min_value=_min_date,
-            max_value=max(_max_date, _today),
-            key="tl_date_input",
-        )
-        if isinstance(_dr, (list, tuple)) and len(_dr) == 2:
-            if _dr[0] != st.session_state.tl_start or _dr[1] != st.session_state.tl_end:
-                st.session_state.tl_start = _dr[0]
-                st.session_state.tl_end   = _dr[1]
-                st.rerun()
-        elif isinstance(_dr, date):
-            if _dr != st.session_state.tl_start:
-                st.session_state.tl_start = _dr
-                st.session_state.tl_end   = _dr
+        # ── Date range picker (form prevents auto-trigger on render) ────────
+        with st.form("tl_date_form"):
+            _dr = st.date_input(
+                "Select date or date range",
+                value=(
+                    st.session_state.tl_start or _min_date,
+                    st.session_state.tl_end   or _max_date,
+                ),
+                min_value=_min_date,
+                max_value=max(_max_date, _today),
+            )
+            if st.form_submit_button("Apply date filter", use_container_width=True):
+                if isinstance(_dr, (list, tuple)) and len(_dr) == 2:
+                    st.session_state.tl_start = _dr[0]
+                    st.session_state.tl_end   = _dr[1]
+                elif isinstance(_dr, date):
+                    st.session_state.tl_start = _dr
+                    st.session_state.tl_end   = _dr
                 st.rerun()
 
         st.divider()
