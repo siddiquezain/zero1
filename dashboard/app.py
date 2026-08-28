@@ -836,7 +836,7 @@ st.markdown(f"""
 <div class="sys-bar">
   <div class="sys-bar-left">
     <div class="sys-bar-id">SIH · 26162 · India Fire Intelligence Platform</div>
-    <div class="sys-bar-title">Industrial Fire &amp; Thermal Anomaly Detection</div>
+    <div class="sys-bar-title">Industrial Fire &amp; Thermal Anomaly Detection &nbsp;—&nbsp; Team ZeroOne</div>
     <div class="sys-bar-sub">
       NASA FIRMS VIIRS 375m &nbsp;·&nbsp; AI Classifier &nbsp;·&nbsp;
       Risk Engine &nbsp;·&nbsp; GIS Export
