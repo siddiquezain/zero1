@@ -76,31 +76,117 @@ for _k, _v in [("tl_start", None), ("tl_end", None),
 
 st.markdown("""
 <style>
-.alert-card { border-radius:8px; padding:14px 16px; margin-bottom:10px; border-left:5px solid; }
-.alert-CRITICAL { background:#2d0a0a; border-color:#dc1414; }
-.alert-HIGH     { background:#2d1400; border-color:#ff6e00; }
-.alert-MEDIUM   { background:#2d2500; border-color:#ffd200; }
-.alert-LOW      { background:#0d2d0d; border-color:#50c850; }
-.class-tag { display:inline-block; padding:3px 8px; border-radius:4px;
-             font-weight:700; font-size:13px; margin-bottom:6px; }
-.tag-fire   { background:#5c1010; color:#ff6060; }
-.tag-source { background:#4a2800; color:#ffaa50; }
-.tag-natural{ background:#0d3d1a; color:#60dd80; }
-/* ── Timeline ── */
-.hist-banner { background:#1a1a2e; border:1px solid #4444aa; border-radius:8px;
-               padding:10px 16px; margin-bottom:8px; font-size:13px; color:#aac; }
-.tl-cal { border-collapse:separate; border-spacing:3px; margin:8px auto; }
-.tl-cal th { color:#666; font-size:11px; padding:4px 6px; text-align:center;
-             font-weight:600; letter-spacing:.05em; }
-.tl-cal td { width:44px; height:44px; text-align:center; border-radius:5px;
-             font-size:12px; vertical-align:middle; cursor:default; transition:filter .1s; }
-.tl-cal td:hover { filter:brightness(1.3); }
-.tl-CRITICAL { background:#2d0a0a; color:#ff6060; border:1px solid #dc1414; }
-.tl-HIGH     { background:#2d1400; color:#ffaa50; border:1px solid #ff6e00; }
-.tl-MODERATE { background:#2d2500; color:#ffdd44; border:1px solid #ffd200; }
-.tl-LOW      { background:#0d2d0d; color:#60dd80; border:1px solid #50c850; }
-.tl-none     { color:#444; }
-.tl-selected { outline:2px solid #fff !important; outline-offset:1px; }
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg-0: #080810; --bg-1: #0c0c18; --bg-2: #101020; --bg-3: #151528; --bg-4: #1a1a32;
+  --border-0: rgba(255,255,255,0.05); --border-1: rgba(255,255,255,0.09); --border-2: rgba(255,255,255,0.15);
+  --text-0: #e0e0f0; --text-1: #9090b8; --text-2: #4a4a70;
+  --accent: #5b78ff;
+  --cr: #e53935; --cr-a: rgba(229,57,53,0.10); --cr-b: rgba(229,57,53,0.30);
+  --hi: #ef6c00; --hi-a: rgba(239,108,0,0.10); --hi-b: rgba(239,108,0,0.30);
+  --me: #f9a825; --me-a: rgba(249,168,37,0.10); --me-b: rgba(249,168,37,0.30);
+  --lo: #43a047; --lo-a: rgba(67,160,71,0.10); --lo-b: rgba(67,160,71,0.30);
+  --font: 'Manrope', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --r: 3px;
+}
+
+html, body, [data-testid="stAppViewContainer"] { background: var(--bg-0) !important; font-family: var(--font); }
+.block-container { padding: 1.25rem 1.5rem 3rem !important; max-width: 100% !important; }
+[data-testid="stSidebar"] { background: var(--bg-1) !important; border-right: 1px solid var(--border-1); }
+[data-testid="stSidebar"] * { font-family: var(--font); }
+#MainMenu, footer, [data-testid="stToolbar"] { display: none !important; }
+
+.stButton > button {
+  background: var(--bg-3) !important; color: var(--text-0) !important;
+  border: 1px solid var(--border-1) !important; border-radius: var(--r) !important;
+  font-family: var(--font) !important; font-size: 12px !important; font-weight: 500 !important;
+  padding: 6px 14px !important; transition: border-color 0.15s, background 0.15s;
+}
+.stButton > button:hover { background: var(--bg-4) !important; border-color: var(--border-2) !important; }
+
+[data-testid="stMetric"] { background: transparent !important; }
+[data-testid="stMetric"] label { color: var(--text-2) !important; font-size: 10px !important; font-weight: 700 !important; letter-spacing: 0.1em; text-transform: uppercase; }
+[data-testid="stMetricValue"] { color: var(--text-0) !important; font-family: var(--mono) !important; }
+
+[data-testid="stExpander"] { border: 1px solid var(--border-1) !important; border-radius: var(--r) !important; background: var(--bg-1) !important; }
+[data-testid="stExpander"] summary { font-family: var(--font) !important; font-size: 12px !important; font-weight: 600 !important; color: var(--text-0) !important; }
+
+[data-testid="stTabs"] [role="tab"] {
+  font-family: var(--font) !important; font-size: 10px !important; font-weight: 600 !important;
+  letter-spacing: 0.08em !important; text-transform: uppercase !important;
+  color: var(--text-2) !important; padding: 8px 14px !important; border-radius: 0 !important;
+}
+[data-testid="stTabs"] [role="tab"][aria-selected="true"] { color: var(--text-0) !important; border-bottom: 2px solid var(--accent) !important; }
+[data-testid="stTabs"] [role="tablist"] { border-bottom: 1px solid var(--border-1) !important; gap: 0 !important; }
+
+::-webkit-scrollbar { width: 3px; height: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 2px; }
+
+/* Alert cards */
+.ac { padding: 11px 0; border-bottom: 1px solid var(--border-0); }
+.ac:last-child { border-bottom: none; }
+.ac-row1 { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+.sev-badge { font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 2px 6px; border-radius: var(--r); }
+.sev-CRITICAL { background: var(--cr-a); color: var(--cr); border: 1px solid var(--cr-b); }
+.sev-HIGH     { background: var(--hi-a); color: var(--hi); border: 1px solid var(--hi-b); }
+.sev-MEDIUM   { background: var(--me-a); color: var(--me); border: 1px solid var(--me-b); }
+.sev-LOW      { background: var(--lo-a); color: var(--lo); border: 1px solid var(--lo-b); }
+.cls-tag { font-size: 9px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 6px; border-radius: var(--r); }
+.cls-fire    { background: rgba(229,57,53,0.08); color: rgba(229,57,53,0.75); }
+.cls-source  { background: rgba(239,108,0,0.08); color: rgba(239,108,0,0.75); }
+.cls-natural { background: rgba(67,160,71,0.08); color: rgba(67,160,71,0.75); }
+.ac-loc { font-size: 12px; font-weight: 600; color: var(--text-0); margin-bottom: 4px; font-family: var(--font); }
+.ac-meta { display: flex; flex-wrap: wrap; gap: 12px; font-family: var(--mono); font-size: 10px; color: var(--text-2); }
+.ac-narr { font-size: 11px; color: var(--text-1); margin-top: 7px; line-height: 1.55; border-top: 1px solid var(--border-0); padding-top: 7px; font-family: var(--font); }
+
+/* Section headers */
+.sec-head { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-2); padding-bottom: 10px; border-bottom: 1px solid var(--border-1); margin-bottom: 12px; }
+
+/* Map bar */
+.map-bar { display: flex; align-items: center; justify-content: space-between; padding-bottom: 10px; border-bottom: 1px solid var(--border-1); margin-bottom: 10px; }
+.map-bar-title { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-2); }
+.map-bar-meta { font-family: var(--mono); font-size: 10px; color: var(--text-2); }
+
+/* Hist banner */
+.hist-banner { display: flex; align-items: center; gap: 10px; padding: 7px 12px; background: rgba(91,120,255,0.06); border: 1px solid rgba(91,120,255,0.18); border-radius: var(--r); margin-bottom: 10px; font-family: var(--mono); font-size: 10px; color: #8090cc; }
+
+/* Legend */
+.legend-row { display: flex; gap: 18px; padding-top: 8px; border-top: 1px solid var(--border-0); font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-2); }
+.leg-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+
+/* Sidebar labels */
+.sb-sec { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-2); margin: 14px 0 6px; }
+
+/* Critical notice */
+.crit-notice { padding: 10px 14px; background: var(--cr-a); border: 1px solid var(--cr-b); border-radius: var(--r); margin-bottom: 10px; }
+.crit-notice-hed { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--cr); margin-bottom: 3px; }
+.crit-notice-body { font-size: 11px; color: rgba(229,57,53,0.65); }
+
+/* High notice */
+.high-notice { padding: 10px 14px; background: var(--hi-a); border: 1px solid var(--hi-b); border-radius: var(--r); margin-bottom: 10px; }
+.high-notice-hed { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--hi); margin-bottom: 3px; }
+.high-notice-body { font-size: 11px; color: rgba(239,108,0,0.65); }
+
+/* Timeline calendar */
+.tl-cal { border-collapse: separate; border-spacing: 3px; margin: 8px auto; }
+.tl-cal th { color: var(--text-2); font-size: 9px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; padding: 4px 6px; text-align: center; }
+.tl-cal td { width: 44px; height: 44px; text-align: center; border-radius: var(--r); font-size: 12px; vertical-align: middle; cursor: default; transition: filter .1s; }
+.tl-cal td:hover { filter: brightness(1.3); }
+.tl-CRITICAL { background: var(--cr-a); color: var(--cr); border: 1px solid var(--cr-b); }
+.tl-HIGH     { background: var(--hi-a); color: var(--hi); border: 1px solid var(--hi-b); }
+.tl-MODERATE { background: var(--me-a); color: var(--me); border: 1px solid var(--me-b); }
+.tl-LOW      { background: var(--lo-a); color: var(--lo); border: 1px solid var(--lo-b); }
+.tl-none     { color: var(--text-2); }
+.tl-selected { outline: 2px solid rgba(255,255,255,0.35) !important; outline-offset: 1px; }
+
+@keyframes pulse-live {
+  0%   { box-shadow: 0 0 0 0 rgba(67,160,71,0.5); }
+  70%  { box-shadow: 0 0 0 5px rgba(67,160,71,0); }
+  100% { box-shadow: 0 0 0 0 rgba(67,160,71,0); }
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -121,43 +207,49 @@ def load_incidents():
 
 
 def _class_tag(output_class: str) -> str:
-    css = {"Industrial Fire / Abnormal Thermal Event": "tag-fire",
-           "Persistent Industrial Thermal Source":     "tag-source",
-           "Forest / Agricultural Fire":               "tag-natural"}.get(output_class, "")
-    em, _, short = OUTPUT_CLASS_CFG.get(output_class, ("⚪", [], output_class))
-    return f'<span class="class-tag {css}">{em} {short}</span>'
+    css = {
+        OUTPUT_CLASS_INDUSTRIAL_FIRE:    "cls-fire",
+        OUTPUT_CLASS_PERSISTENT_SOURCE:  "cls-source",
+        OUTPUT_CLASS_NATURAL_FIRE:       "cls-natural",
+    }.get(output_class, "")
+    em, _, short = OUTPUT_CLASS_CFG.get(output_class, ("", [], output_class))
+    return f'<span class="cls-tag {css}">{short}</span>'
 
 
 def _alert_card(a: dict) -> str:
     sev = a["severity"]
-    status = STATUS_BADGE.get(a["status"], a["status"])
-    output_class = a.get("output_class", "")
+    status_text = STATUS_BADGE.get(a["status"], a["status"])
     city = a.get("nearest_city", "—")
     city_dist = a.get("dist_nearest_city_km", 0)
-    pop = a.get("near_population", 0)
-    land = a.get("land_cover_context", "—")
+    frp = a.get("frp_mw", 0)
+    persist = a.get("persistence_count", 1)
+    dist_fac = a.get("dist_nearest_facility_km", 0)
+    risk = a.get("risk_score", 0)
+    acq = a.get("acq_date", "")
+    night = "N" if a.get("day_night") == "N" else "D"
+    output_class = a.get("output_class", "")
+    narrative = a.get("narrative", "")
+    lat = a.get("lat", 0)
+    lon = a.get("lon", 0)
     haz = a.get("hazard_facility_type", "—")
-    night = "🌙 Night" if a.get("day_night") == "N" else "☀️ Day"
+    land = a.get("land_cover_context", "—")
+
     return f"""
-<div class="alert-card alert-{sev}">
-  {_class_tag(output_class)}
-  <div style="font-size:13px;font-weight:700;color:#eee;margin-bottom:4px;">
-    {SEVERITY_EMOJI.get(sev,'')} {sev} &nbsp;|&nbsp; {status}
+<div class="ac">
+  <div class="ac-row1">
+    <span class="sev-badge sev-{sev}">{sev}</span>
+    {_class_tag(output_class)}
+    <span style="font-size:9px;color:var(--text-2);font-family:var(--mono);letter-spacing:0.04em;margin-left:auto">{status_text} · {acq}</span>
   </div>
-  <div style="font-size:12px;color:#bbb;line-height:1.7;">
-    📍 {a['lat']:.4f}°N, {a['lon']:.4f}°E &nbsp;·&nbsp;
-    🏭 {haz} ({a['dist_nearest_facility_km']:.1f} km) &nbsp;·&nbsp;
-    🌿 {land}<br>
-    🌆 {city} ({city_dist:.0f} km) &nbsp;·&nbsp;
-    👥 {pop:,} &nbsp;·&nbsp;
-    {night} &nbsp;·&nbsp; 📅 {a.get('acq_date','?')}
+  <div class="ac-loc">{lat:.4f}°N, {lon:.4f}°E · {city} ({city_dist:.0f} km)</div>
+  <div class="ac-meta">
+    <span>FRP <b style="color:var(--text-0)">{frp:.1f}</b> MW</span>
+    <span>Persist <b style="color:var(--text-0)">{persist}×</b></span>
+    <span>{dist_fac:.1f} km to {haz}</span>
+    <span>Risk <b style="color:var(--text-0)">{risk}</b>/100</span>
+    <span>{'🌙' if night=='N' else '☀'} {land}</span>
   </div>
-  <div style="font-size:12px;color:#bbb;margin-top:4px;">
-    🔥 FRP {a['frp_mw']:.1f} MW &nbsp;·&nbsp;
-    🔁 Persist {a['persistence_count']}× &nbsp;·&nbsp;
-    ⚠️ Risk score {a['risk_score']}/100
-  </div>
-  <div style="font-size:12px;color:#ccc;margin-top:6px;">{a['narrative']}</div>
+  <div class="ac-narr">{narrative}</div>
 </div>"""
 
 
@@ -243,15 +335,16 @@ def _build_map(scored: pd.DataFrame, incidents: pd.DataFrame,
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("### 🔥 SIH26162")
-    st.caption("AI-Based Detection and Classification of Industrial Fires\nand Persistent Thermal Sources")
+    st.markdown('<div style="font-family:var(--mono);font-size:9px;font-weight:500;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-2);padding:4px 0 12px">SIH · 26162</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:13px;font-weight:700;color:var(--text-0);margin-bottom:2px">Fire Intelligence</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:10px;color:var(--text-2);margin-bottom:14px">AI-Based Detection Platform</div>', unsafe_allow_html=True)
     st.divider()
 
-    st.markdown("**Severity filter**")
+    st.markdown('<div class="sb-sec">Severity</div>', unsafe_allow_html=True)
     sev_filter = st.multiselect("Severity", ["CRITICAL","HIGH","MEDIUM","LOW"],
         default=["CRITICAL","HIGH","MEDIUM","LOW"], label_visibility="collapsed")
 
-    st.markdown("**Status filter**")
+    st.markdown('<div class="sb-sec">Status</div>', unsafe_allow_html=True)
     status_filter = st.multiselect("Status", alert_store.LIFECYCLE_STATES,
         default=["DETECTED","VALIDATING","ALERTED","ESCALATED","MONITORING"],
         label_visibility="collapsed")
@@ -261,7 +354,7 @@ with st.sidebar:
         ["Output Class (PS classification)", "Alert Severity"], index=0)
 
     st.divider()
-    st.markdown("**🔄 Refresh**")
+    st.markdown('<div class="sb-sec">Pipeline</div>', unsafe_allow_html=True)
     if st.button("Re-run pipeline", use_container_width=True):
         with st.spinner("Running …"):
             r = run_pipeline(fresh=True)
@@ -270,54 +363,82 @@ with st.sidebar:
         st.rerun()
 
     st.divider()
+    st.markdown('<div class="sb-sec">PS Output Classes</div>', unsafe_allow_html=True)
     st.markdown("""
-**PS Output Classes**
-🔴 **Industrial Fire / Abnormal Thermal Event**
-Accidental fires, gas leaks, explosions, abnormal thermal events.
-
-🟠 **Persistent Industrial Thermal Source**
-Continuous industrial heat: gas flares, refineries, steel plants, kilns.
-
-🟢 **Forest / Agricultural Fire**
-Wildfires, paddy-stubble burning, savanna fires.
-
-⬜ **Confirmed incident site** (past events)
-""")
+<div style="font-size:10px;color:var(--text-1);line-height:1.7">
+<span style="color:var(--cr)">■</span> <b style="color:var(--text-0)">Industrial Fire</b><br>
+Accidental fires, gas leaks, explosions, abnormal thermal events.<br><br>
+<span style="color:var(--hi)">■</span> <b style="color:var(--text-0)">Persistent Source</b><br>
+Continuous industrial heat: gas flares, refineries, steel plants, kilns.<br><br>
+<span style="color:var(--lo)">■</span> <b style="color:var(--text-0)">Natural Fire</b><br>
+Wildfires, paddy-stubble burning, savanna fires.<br><br>
+<span style="color:#fff">■</span> <b style="color:var(--text-0)">Confirmed incident site</b> (past events)
+</div>
+""", unsafe_allow_html=True)
 
     st.divider()
-    st.caption(
-        "Data: NASA FIRMS VIIRS 375 m · VNF Gas Flare Catalogue · "
-        "WRI GPPD · OpenStreetMap  \n"
-        "Model: RandomForest trained globally, India holdout.  \n"
-        "Framing: *anomalous departure from known patterns*, "
-        "not confirmed fire detection."
-    )
+    st.markdown("""
+<div style="font-size:9px;color:var(--text-2);line-height:1.7;font-family:var(--mono)">
+Data: NASA FIRMS VIIRS 375m · VNF Gas Flare Catalogue · WRI GPPD · OpenStreetMap<br>
+Model: RandomForest trained globally, India holdout.<br>
+Framing: anomalous departure from known patterns — not confirmed fire detection.
+</div>
+""", unsafe_allow_html=True)
 
 
 # ── Header ─────────────────────────────────────────────────────────────────────
-st.markdown("# 🔥 Industrial Fire & Thermal Anomaly Detection")
-st.caption(
-    "**SIH26162** — AI-enabled geospatial system · "
-    "NASA FIRMS NRT → AI Classifier → Risk Engine → Alert Feed + GIS Export  \n"
-    "Integrates: thermal anomaly data · land-cover information · "
-    "industrial infrastructure databases (OSM/GPPD) · satellite imagery (VIIRS 375 m)"
-)
-
-# ── Stats bar — PS output class counts ────────────────────────────────────────
 scored_df = load_scored()
 daily_summary = get_daily_summary()  # timeline aggregation
 c = alert_store.counts()
 now_str = datetime.now(timezone.utc).strftime("%H:%M UTC")
 
-col1, col2, col3, col4, col5, col6 = st.columns(6)
-col1.metric("Active alerts", c["active"])
-col2.metric("🔴 Industrial Fires", (scored_df["output_class"]==OUTPUT_CLASS_INDUSTRIAL_FIRE).sum() if not scored_df.empty else "—")
-col3.metric("🟠 Persistent Sources", (scored_df["output_class"]==OUTPUT_CLASS_PERSISTENT_SOURCE).sum() if not scored_df.empty else "—")
-col4.metric("🟢 Natural Fires", (scored_df["output_class"]==OUTPUT_CLASS_NATURAL_FIRE).sum() if not scored_df.empty else "—")
-col5.metric("🔴 CRITICAL alerts", c["CRITICAL"])
-col6.metric("Last refreshed", now_str)
+st.markdown(f"""
+<div class="sys-header" style="display:flex;align-items:flex-start;justify-content:space-between;padding-bottom:14px;border-bottom:1px solid var(--border-1);margin-bottom:18px">
+  <div>
+    <div style="font-family:var(--mono);font-size:9px;font-weight:500;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-2);margin-bottom:4px">SIH · 26162 · India Fire Intelligence</div>
+    <div style="font-size:18px;font-weight:700;letter-spacing:-0.02em;color:var(--text-0);line-height:1.2;font-family:var(--font)">Industrial Fire &amp; Thermal Anomaly Detection</div>
+    <div style="font-size:11px;color:var(--text-2);margin-top:4px;font-family:var(--font)">NASA FIRMS VIIRS 375m · AI Classifier · Risk Engine · GIS Export</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:10px;color:var(--text-2);margin-top:3px">
+    <div style="width:6px;height:6px;border-radius:50%;background:var(--lo);animation:pulse-live 2s infinite;flex-shrink:0"></div>
+    LIVE · {now_str} · NRT
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
-st.divider()
+# ── Stats bar — PS output class counts ────────────────────────────────────────
+n_industrial = int((scored_df["output_class"]==OUTPUT_CLASS_INDUSTRIAL_FIRE).sum()) if not scored_df.empty else 0
+n_persistent = int((scored_df["output_class"]==OUTPUT_CLASS_PERSISTENT_SOURCE).sum()) if not scored_df.empty else 0
+n_natural = int((scored_df["output_class"]==OUTPUT_CLASS_NATURAL_FIRE).sum()) if not scored_df.empty else 0
+
+st.markdown(f"""
+<div style="display:flex;border-bottom:1px solid var(--border-1);margin-bottom:20px">
+  <div style="flex:1;padding:10px 20px 12px 0;border-right:1px solid var(--border-0)">
+    <div style="font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-2);margin-bottom:4px">Active Alerts</div>
+    <div style="font-family:var(--mono);font-size:22px;font-weight:500;letter-spacing:-0.03em;color:var(--text-0);line-height:1">{c['active']}</div>
+  </div>
+  <div style="flex:1;padding:10px 20px 12px;border-right:1px solid var(--border-0)">
+    <div style="font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-2);margin-bottom:4px">Critical</div>
+    <div style="font-family:var(--mono);font-size:22px;font-weight:500;letter-spacing:-0.03em;color:{'var(--cr)' if c['CRITICAL'] > 0 else 'var(--text-0)'};line-height:1">{c['CRITICAL']}</div>
+  </div>
+  <div style="flex:1;padding:10px 20px 12px;border-right:1px solid var(--border-0)">
+    <div style="font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-2);margin-bottom:4px">High</div>
+    <div style="font-family:var(--mono);font-size:22px;font-weight:500;letter-spacing:-0.03em;color:{'var(--hi)' if c['HIGH'] > 0 else 'var(--text-0)'};line-height:1">{c['HIGH']}</div>
+  </div>
+  <div style="flex:1;padding:10px 20px 12px;border-right:1px solid var(--border-0)">
+    <div style="font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-2);margin-bottom:4px">Industrial Fire</div>
+    <div style="font-family:var(--mono);font-size:22px;font-weight:500;letter-spacing:-0.03em;color:var(--text-0);line-height:1">{n_industrial}</div>
+  </div>
+  <div style="flex:1;padding:10px 20px 12px;border-right:1px solid var(--border-0)">
+    <div style="font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-2);margin-bottom:4px">Persistent Sources</div>
+    <div style="font-family:var(--mono);font-size:22px;font-weight:500;letter-spacing:-0.03em;color:var(--text-0);line-height:1">{n_persistent}</div>
+  </div>
+  <div style="flex:1;padding:10px 0 12px 20px">
+    <div style="font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-2);margin-bottom:4px">Natural Fire</div>
+    <div style="font-family:var(--mono);font-size:22px;font-weight:500;letter-spacing:-0.03em;color:var(--text-0);line-height:1">{n_natural}</div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
 # ── Apply timeline date filter ─────────────────────────────────────────────────
 _tl_s = st.session_state.tl_start
@@ -341,12 +462,12 @@ with col_alert:
     if _tl_s and _tl_e:
         _s_iso, _e_iso = _tl_s.isoformat(), _tl_e.isoformat()
         alerts = [a for a in alerts if _s_iso <= a.get("acq_date", "") <= _e_iso]
-    _feed_label = f"### Alert Feed — {len(alerts)} alerts"
+    _feed_extra = ""
     if _tl_s:
         _range_str = (_tl_s.strftime("%b %d") if _tl_s == _tl_e
                       else f"{_tl_s.strftime('%b %d')} – {_tl_e.strftime('%b %d, %Y')}")
-        _feed_label += f"  \n<small style='color:#aac'>📅 {_range_str}</small>"
-    st.markdown(_feed_label, unsafe_allow_html=True)
+        _feed_extra = f' &nbsp;·&nbsp; <span style="color:var(--text-2);font-family:var(--mono)">{_range_str}</span>'
+    st.markdown(f'<div class="sec-head">Alert Feed &nbsp;·&nbsp; <span style="color:var(--text-1)">{len(alerts)}</span>{_feed_extra}</div>', unsafe_allow_html=True)
 
     for sev in ["CRITICAL","HIGH","MEDIUM","LOW"]:
         if sev not in sev_filter:
@@ -376,25 +497,32 @@ with col_map:
         _range_lbl = (_tl_s.strftime("%b %d, %Y") if _tl_s == _tl_e
                       else f"{_tl_s.strftime('%b %d')} – {_tl_e.strftime('%b %d, %Y')}")
         st.markdown(
-            f'<div class="hist-banner">🕐 <b>HISTORICAL VIEW</b> &nbsp;·&nbsp; {_range_lbl}'
-            f'&nbsp;·&nbsp; {len(map_df):,} detections shown</div>',
+            f'<div class="hist-banner">&#9632; HISTORICAL VIEW &nbsp;·&nbsp; {_range_lbl} &nbsp;·&nbsp; {len(map_df):,} detections</div>',
             unsafe_allow_html=True,
         )
-        _map_title = "### Historical Detection Map — India"
+        map_title_label = "Historical Detection Map"
     else:
-        _map_title = "### Live Detection Map — India"
-    st.markdown(_map_title)
+        map_title_label = "Live Detection Map — India"
+
+    st.markdown(f"""
+<div class="map-bar">
+  <div class="map-bar-title">{map_title_label}</div>
+  <div class="map-bar-meta">VIIRS 375m · {now_str}</div>
+</div>
+""", unsafe_allow_html=True)
+
     incidents = load_incidents()
     st.pydeck_chart(_build_map(map_df, incidents, show_incidents, colour_by),
                     use_container_width=True, height=560)
 
-    # Map legend
-    lcols = st.columns(3)
-    lcols[0].markdown("🔴 Industrial Fire")
-    lcols[1].markdown("🟠 Persistent Source")
-    lcols[2].markdown("🟢 Natural Fire")
-
-st.divider()
+    st.markdown("""
+<div class="legend-row">
+  <span><span class="leg-dot" style="background:#dc1414"></span>Industrial Fire</span>
+  <span><span class="leg-dot" style="background:#ff8c00"></span>Persistent Source</span>
+  <span><span class="leg-dot" style="background:#32c850"></span>Natural Fire</span>
+  <span><span class="leg-dot" style="background:#fff"></span>Confirmed Incident</span>
+</div>
+""", unsafe_allow_html=True)
 
 # ── Tabs ──────────────────────────────────────────────────────────────────────
 tab_timeline, tab_gis, tab_ps, tab_inc, tab_model, tab_limits = st.tabs([
@@ -495,16 +623,11 @@ with tab_timeline:
         _sel_s = st.session_state.tl_start
         _sel_e = st.session_state.tl_end
 
-        _sev_td_style = {
-            "CRITICAL": "background:#2d0a0a;color:#ff6060;border:1px solid #dc1414;",
-            "HIGH":     "background:#2d1400;color:#ffaa50;border:1px solid #ff6e00;",
-            "MODERATE": "background:#2d2500;color:#ffdd44;border:1px solid #ffd200;",
-            "LOW":      "background:#0d2d0d;color:#60dd80;border:1px solid #50c850;",
-        }
+        _sev_td_style: dict[str, str] = {}  # styles now handled by CSS classes
         _cal_html = (
-            f'<div style="font-family:monospace;max-width:460px">'
-            f'<div style="text-align:center;font-size:15px;font-weight:700;'
-            f'color:#eee;margin-bottom:8px">'
+            f'<div style="font-family:var(--mono);max-width:460px">'
+            f'<div style="text-align:center;font-size:13px;font-weight:700;'
+            f'color:var(--text-0);margin-bottom:8px;font-family:var(--font)">'
             f'{_cal_month.strftime("%B %Y")}</div>'
             f'<table class="tl-cal">'
             f'<tr>{"".join(f"<th>{d}</th>" for d in ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"])}</tr>'
@@ -521,7 +644,6 @@ with tab_timeline:
                     _is_sel = (_sel_s and _sel_e and _sel_s <= _d_obj <= _sel_e)
                     if _rd:
                         _sev = _rd["severity_label"]
-                        _st  = _sev_td_style.get(_sev, "")
                         _em  = _rd["emoji"]
                         _sel_cls = " tl-selected" if _is_sel else ""
                         _tip_txt = (
@@ -531,7 +653,7 @@ with tab_timeline:
                         )
                         _cal_html += (
                             f'<td class="tl-{_sev}{_sel_cls}" '
-                            f'style="{_st}" title="{_tip_txt}">'
+                            f'title="{_tip_txt}">'
                             f'{_em}<br>{_day}</td>'
                         )
                     else:
@@ -568,17 +690,18 @@ with tab_timeline:
                 # Critical banner
                 if _n_critical > 0:
                     st.markdown(
-                        f'<div class="alert-card alert-CRITICAL" style="margin-bottom:12px">'
-                        f'<b>🔥 CRITICAL FIRE ACTIVITY — {_range_str}</b><br>'
-                        f'{_n_critical} critical events detected &nbsp;·&nbsp; '
-                        f'{_n_highconf} high-confidence detections</div>',
+                        f'<div class="crit-notice">'
+                        f'<div class="crit-notice-hed">Critical Fire Activity — {_range_str}</div>'
+                        f'<div class="crit-notice-body">{_n_critical} critical events detected · {_n_highconf} high-confidence detections</div>'
+                        f'</div>',
                         unsafe_allow_html=True,
                     )
                 elif _n_highconf > 0:
                     st.markdown(
-                        f'<div class="alert-card alert-HIGH" style="margin-bottom:12px">'
-                        f'<b>🟠 HIGH FIRE ACTIVITY — {_range_str}</b><br>'
-                        f'{_n_highconf} high-confidence detections</div>',
+                        f'<div class="high-notice">'
+                        f'<div class="high-notice-hed">High Fire Activity — {_range_str}</div>'
+                        f'<div class="high-notice-body">{_n_highconf} high-confidence detections</div>'
+                        f'</div>',
                         unsafe_allow_html=True,
                     )
 
