@@ -36,24 +36,20 @@ from src.alerting.risk_engine import (
 from src.alerting.pipeline import run as run_pipeline
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
-INDIA_SCORES = ROOT / "data/processed/stage6_india_scores.parquet"
+INDIA_SCORES    = ROOT / "data/processed/stage6_india_scores.parquet"
 INCIDENT_SCORES = ROOT / "data/incidents/stage7_incident_scores.parquet"
 
 # ── PS output class config ─────────────────────────────────────────────────────
-# Maps PS output class → (emoji, colour [R,G,B,A], short label)
 OUTPUT_CLASS_CFG = {
-    OUTPUT_CLASS_INDUSTRIAL_FIRE:    ("🔴", [220,  20,  20, 240], "Industrial Fire"),
-    OUTPUT_CLASS_PERSISTENT_SOURCE:  ("🟠", [255, 140,   0, 220], "Persistent Source"),
-    OUTPUT_CLASS_NATURAL_FIRE:       ("🟢", [ 50, 200,  80, 180], "Natural Fire"),
+    OUTPUT_CLASS_INDUSTRIAL_FIRE:   ([220,  20,  20, 240], "Industrial Fire"),
+    OUTPUT_CLASS_PERSISTENT_SOURCE: ([255, 140,   0, 220], "Persistent Source"),
+    OUTPUT_CLASS_NATURAL_FIRE:      ([ 50, 200,  80, 180], "Natural Fire"),
 }
-SEVERITY_EMOJI = {"CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "🟢"}
-STATUS_BADGE = {
-    "DETECTED":    "🔵 DETECTED",
-    "VALIDATING":  "🟣 VALIDATING",
-    "ALERTED":     "🔶 ALERTED",
-    "ESCALATED":   "🔴 ESCALATED",
-    "MONITORING":  "🟡 MONITORING",
-    "EXTINGUISHED":"⬛ EXTINGUISHED",
+
+_TYPE_SHORT = {
+    OUTPUT_CLASS_INDUSTRIAL_FIRE:   "Industrial Fire",
+    OUTPUT_CLASS_PERSISTENT_SOURCE: "Persistent Source",
+    OUTPUT_CLASS_NATURAL_FIRE:      "Natural Fire",
 }
 
 # ── Auto-seed alert DB on first run ───────────────────────────────────────────
@@ -62,7 +58,7 @@ if not (ROOT / "data/alerts.db").exists():
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="SIH26162 — Industrial Fire Detection",
+    page_title="SIH26162 — Industrial Fire Intelligence",
     page_icon="🔥",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -74,118 +70,495 @@ for _k, _v in [("tl_start", None), ("tl_end", None),
     if _k not in st.session_state:
         st.session_state[_k] = _v
 
+# ── Design system ──────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
 :root {
-  --bg-0: #080810; --bg-1: #0c0c18; --bg-2: #101020; --bg-3: #151528; --bg-4: #1a1a32;
-  --border-0: rgba(255,255,255,0.05); --border-1: rgba(255,255,255,0.09); --border-2: rgba(255,255,255,0.15);
-  --text-0: #e0e0f0; --text-1: #9090b8; --text-2: #4a4a70;
-  --accent: #5b78ff;
-  --cr: #e53935; --cr-a: rgba(229,57,53,0.10); --cr-b: rgba(229,57,53,0.30);
-  --hi: #ef6c00; --hi-a: rgba(239,108,0,0.10); --hi-b: rgba(239,108,0,0.30);
-  --me: #f9a825; --me-a: rgba(249,168,37,0.10); --me-b: rgba(249,168,37,0.30);
-  --lo: #43a047; --lo-a: rgba(67,160,71,0.10); --lo-b: rgba(67,160,71,0.30);
-  --font: 'Manrope', system-ui, sans-serif;
-  --mono: 'JetBrains Mono', 'Fira Code', monospace;
-  --r: 3px;
+  /* Surfaces */
+  --bg-0: #070707;
+  --bg-1: #0d0d0d;
+  --bg-2: #111111;
+  --bg-3: #181818;
+  --bg-4: #1f1f1f;
+
+  /* Borders */
+  --bd-0: rgba(255,255,255,0.04);
+  --bd-1: rgba(255,255,255,0.08);
+  --bd-2: rgba(255,255,255,0.15);
+
+  /* Text */
+  --t0: #e6e6e6;
+  --t1: #888888;
+  --t2: #484848;
+
+  /* Severity */
+  --cr:   #e03131;
+  --cr-a: rgba(224,49,49,0.07);
+  --cr-b: rgba(224,49,49,0.20);
+  --hi:   #d97706;
+  --hi-a: rgba(217,119,6,0.07);
+  --hi-b: rgba(217,119,6,0.20);
+  --me:   #b5860d;
+  --me-a: rgba(181,134,13,0.07);
+  --me-b: rgba(181,134,13,0.20);
+  --lo:   #2d8a2d;
+  --lo-a: rgba(45,138,45,0.07);
+  --lo-b: rgba(45,138,45,0.20);
+
+  /* System */
+  --sys:  #3d7dc8;
+
+  --font: 'IBM Plex Sans', system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', 'Courier New', monospace;
+  --r: 2px;
 }
 
-html, body, [data-testid="stAppViewContainer"] { background: var(--bg-0) !important; font-family: var(--font); }
-.block-container { padding: 1.25rem 1.5rem 3rem !important; max-width: 100% !important; }
-[data-testid="stSidebar"] { background: var(--bg-1) !important; border-right: 1px solid var(--border-1); }
-[data-testid="stSidebar"] * { font-family: var(--font); }
-#MainMenu, footer, [data-testid="stToolbar"] { display: none !important; }
-
-.stButton > button {
-  background: var(--bg-3) !important; color: var(--text-0) !important;
-  border: 1px solid var(--border-1) !important; border-radius: var(--r) !important;
-  font-family: var(--font) !important; font-size: 12px !important; font-weight: 500 !important;
-  padding: 6px 14px !important; transition: border-color 0.15s, background 0.15s;
+/* === BASE === */
+html, body, [data-testid="stAppViewContainer"] {
+  background: var(--bg-0) !important;
+  font-family: var(--font);
+  color: var(--t0);
 }
-.stButton > button:hover { background: var(--bg-4) !important; border-color: var(--border-2) !important; }
-
-[data-testid="stMetric"] { background: transparent !important; }
-[data-testid="stMetric"] label { color: var(--text-2) !important; font-size: 10px !important; font-weight: 700 !important; letter-spacing: 0.1em; text-transform: uppercase; }
-[data-testid="stMetricValue"] { color: var(--text-0) !important; font-family: var(--mono) !important; }
-
-[data-testid="stExpander"] { border: 1px solid var(--border-1) !important; border-radius: var(--r) !important; background: var(--bg-1) !important; }
-[data-testid="stExpander"] summary { font-family: var(--font) !important; font-size: 12px !important; font-weight: 600 !important; color: var(--text-0) !important; }
-
-[data-testid="stTabs"] [role="tab"] {
-  font-family: var(--font) !important; font-size: 10px !important; font-weight: 600 !important;
-  letter-spacing: 0.08em !important; text-transform: uppercase !important;
-  color: var(--text-2) !important; padding: 8px 14px !important; border-radius: 0 !important;
+.block-container {
+  padding: 0 1.5rem 3rem !important;
+  max-width: 100% !important;
 }
-[data-testid="stTabs"] [role="tab"][aria-selected="true"] { color: var(--text-0) !important; border-bottom: 2px solid var(--accent) !important; }
-[data-testid="stTabs"] [role="tablist"] { border-bottom: 1px solid var(--border-1) !important; gap: 0 !important; }
+#MainMenu, footer,
+[data-testid="stToolbar"],
+[data-testid="stDecoration"],
+[data-testid="stHeader"] { display: none !important; }
 
+/* === SCROLLBAR === */
 ::-webkit-scrollbar { width: 3px; height: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 2px; }
+::-webkit-scrollbar-thumb { background: var(--bd-2); border-radius: 1px; }
 
-/* Alert cards */
-.ac { padding: 11px 0; border-bottom: 1px solid var(--border-0); }
+/* === SIDEBAR === */
+[data-testid="stSidebar"] {
+  background: var(--bg-1) !important;
+  border-right: 1px solid var(--bd-1) !important;
+}
+[data-testid="stSidebar"] > div:first-child { padding: 0 !important; }
+[data-testid="stSidebar"] * { font-family: var(--font) !important; }
+[data-testid="stSidebar"] .block-container { padding: 0 !important; }
+section[data-testid="stSidebar"] > div { padding-top: 0 !important; }
+
+/* === SIDEBAR INNER === */
+.sb-inner { padding: 20px 16px; }
+.sb-product { padding-bottom: 16px; border-bottom: 1px solid var(--bd-1); margin-bottom: 16px; }
+.sb-product-id {
+  font-family: var(--mono); font-size: 8px; font-weight: 500;
+  letter-spacing: 0.22em; text-transform: uppercase; color: var(--t2);
+  margin-bottom: 6px;
+}
+.sb-product-name {
+  font-size: 13px; font-weight: 600; color: var(--t0); margin-bottom: 2px;
+  letter-spacing: -0.01em;
+}
+.sb-product-sub { font-size: 10px; color: var(--t2); }
+
+.sb-section {
+  font-size: 8px; font-weight: 600; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--t2);
+  margin: 16px 0 8px; padding-bottom: 6px;
+  border-bottom: 1px solid var(--bd-0);
+}
+
+.sb-data {
+  padding: 14px 16px; margin-top: 8px; border-top: 1px solid var(--bd-1);
+  font-size: 9px; color: var(--t2); line-height: 1.8;
+  font-family: var(--mono);
+}
+
+/* === BUTTONS === */
+.stButton > button {
+  background: var(--bg-3) !important;
+  color: var(--t1) !important;
+  border: 1px solid var(--bd-1) !important;
+  border-radius: var(--r) !important;
+  font-family: var(--font) !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  padding: 5px 10px !important;
+  white-space: nowrap !important;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+.stButton > button:hover {
+  background: var(--bg-4) !important;
+  border-color: var(--bd-2) !important;
+  color: var(--t0) !important;
+}
+
+/* === TABS === */
+[data-testid="stTabs"] [role="tablist"] {
+  border-bottom: 1px solid var(--bd-1) !important;
+  gap: 0 !important;
+}
+[data-testid="stTabs"] [role="tab"] {
+  font-family: var(--font) !important;
+  font-size: 9px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.14em !important;
+  text-transform: uppercase !important;
+  color: var(--t2) !important;
+  padding: 10px 16px !important;
+  border-radius: 0 !important;
+  transition: color 0.12s;
+}
+[data-testid="stTabs"] [role="tab"][aria-selected="true"] {
+  color: var(--t0) !important;
+  border-bottom: 2px solid var(--sys) !important;
+}
+[data-testid="stTabs"] [role="tab"]:hover { color: var(--t1) !important; }
+
+/* === FORM / SELECT === */
+/* Multiselect tags — target data-tag attribute set by Streamlit's emotion CSS */
+span[data-tag] {
+  background-color: var(--bg-4) !important;
+  border: 1px solid var(--bd-2) !important;
+  border-radius: var(--r) !important;
+  color: var(--t0) !important;
+}
+span[data-tag] > span {
+  background-color: transparent !important;
+  color: var(--t0) !important;
+}
+span[data-tag] button { color: var(--t1) !important; }
+[data-baseweb="input"], [data-baseweb="select"] {
+  background: var(--bg-2) !important;
+  border-color: var(--bd-1) !important;
+  border-radius: var(--r) !important;
+  font-family: var(--font) !important;
+}
+label[data-testid="stWidgetLabel"] {
+  font-size: 9px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase !important;
+  color: var(--t2) !important;
+}
+
+/* === SYSTEM BAR === */
+.sys-bar {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 18px 0 16px; border-bottom: 1px solid var(--bd-1);
+  margin-bottom: 20px;
+}
+.sys-bar-left {}
+.sys-bar-id {
+  font-family: var(--mono); font-size: 8px; font-weight: 500;
+  letter-spacing: 0.22em; text-transform: uppercase; color: var(--t2);
+  margin-bottom: 5px;
+}
+.sys-bar-title {
+  font-size: 15px; font-weight: 600; letter-spacing: -0.02em;
+  color: var(--t0); margin-bottom: 3px;
+}
+.sys-bar-sub { font-size: 10px; color: var(--t2); }
+.sys-bar-live {
+  display: flex; align-items: center; gap: 7px;
+  font-family: var(--mono); font-size: 9px; color: var(--t2);
+  margin-top: 4px;
+}
+.live-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--lo); flex-shrink: 0;
+  animation: pulse-live 2.5s infinite;
+}
+
+/* === STATUS STRIP === */
+.status-strip {
+  display: flex; border-bottom: 1px solid var(--bd-1);
+  margin-bottom: 22px; overflow: hidden;
+}
+.ss-item {
+  flex: 1; padding: 12px 0 14px;
+  border-right: 1px solid var(--bd-0);
+}
+.ss-item:first-child { padding-left: 0; }
+.ss-item:last-child  { border-right: none; }
+.ss-label {
+  font-size: 8px; font-weight: 600; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--t2); margin-bottom: 6px;
+}
+.ss-val {
+  font-family: var(--mono); font-size: 20px; font-weight: 400;
+  letter-spacing: -0.03em; color: var(--t0); line-height: 1;
+}
+.ss-val-cr { color: var(--cr); }
+.ss-val-hi { color: var(--hi); }
+.ss-sub {
+  font-size: 9px; color: var(--t2); margin-top: 3px;
+  font-family: var(--mono);
+}
+
+/* === ALERT FEED === */
+.feed-header {
+  display: flex; align-items: baseline; justify-content: space-between;
+  padding-bottom: 10px; border-bottom: 1px solid var(--bd-1);
+  margin-bottom: 14px;
+}
+.feed-title {
+  font-size: 8px; font-weight: 600; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--t2);
+}
+.feed-meta { font-family: var(--mono); font-size: 9px; color: var(--t2); }
+
+.sev-head {
+  font-size: 8px; font-weight: 600; letter-spacing: 0.18em;
+  text-transform: uppercase; padding: 10px 0 8px;
+  border-bottom: 1px solid var(--bd-0);
+  margin-bottom: 2px;
+}
+.sev-head-cr { color: var(--cr); }
+.sev-head-hi { color: var(--hi); }
+.sev-head-me { color: var(--me); }
+.sev-head-lo { color: var(--lo); }
+.sev-head-ct { color: var(--t2); font-weight: 400; margin-left: 6px; }
+
+/* Alert card — flat row, no card container */
+.ac {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--bd-0);
+}
 .ac:last-child { border-bottom: none; }
-.ac-row1 { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
-.sev-badge { font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 2px 6px; border-radius: var(--r); }
-.sev-CRITICAL { background: var(--cr-a); color: var(--cr); border: 1px solid var(--cr-b); }
-.sev-HIGH     { background: var(--hi-a); color: var(--hi); border: 1px solid var(--hi-b); }
-.sev-MEDIUM   { background: var(--me-a); color: var(--me); border: 1px solid var(--me-b); }
-.sev-LOW      { background: var(--lo-a); color: var(--lo); border: 1px solid var(--lo-b); }
-.cls-tag { font-size: 9px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 6px; border-radius: var(--r); }
-.cls-fire    { background: rgba(229,57,53,0.08); color: rgba(229,57,53,0.75); }
-.cls-source  { background: rgba(239,108,0,0.08); color: rgba(239,108,0,0.75); }
-.cls-natural { background: rgba(67,160,71,0.08); color: rgba(67,160,71,0.75); }
-.ac-loc { font-size: 12px; font-weight: 600; color: var(--text-0); margin-bottom: 4px; font-family: var(--font); }
-.ac-meta { display: flex; flex-wrap: wrap; gap: 12px; font-family: var(--mono); font-size: 10px; color: var(--text-2); }
-.ac-narr { font-size: 11px; color: var(--text-1); margin-top: 7px; line-height: 1.55; border-top: 1px solid var(--border-0); padding-top: 7px; font-family: var(--font); }
+.ac-head {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
+}
+.ac-sev {
+  font-size: 8px; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.sev-CRITICAL { color: var(--cr); }
+.sev-HIGH     { color: var(--hi); }
+.sev-MEDIUM   { color: var(--me); }
+.sev-LOW      { color: var(--lo); }
 
-/* Section headers */
-.sec-head { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-2); padding-bottom: 10px; border-bottom: 1px solid var(--border-1); margin-bottom: 12px; }
+.ac-type {
+  font-size: 9px; color: var(--t2); font-weight: 500; letter-spacing: 0.04em;
+}
+.ac-right {
+  margin-left: auto; display: flex; align-items: center; gap: 10px;
+}
+.ac-status {
+  font-size: 8px; font-weight: 600; letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.status-DETECTED    { color: var(--t2); }
+.status-VALIDATING  { color: var(--me); }
+.status-ALERTED     { color: var(--hi); }
+.status-ESCALATED   { color: var(--cr); }
+.status-MONITORING  { color: var(--sys); }
+.status-EXTINGUISHED { color: var(--t2); }
 
-/* Map bar */
-.map-bar { display: flex; align-items: center; justify-content: space-between; padding-bottom: 10px; border-bottom: 1px solid var(--border-1); margin-bottom: 10px; }
-.map-bar-title { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-2); }
-.map-bar-meta { font-family: var(--mono); font-size: 10px; color: var(--text-2); }
+.ac-date {
+  font-family: var(--mono); font-size: 9px; color: var(--t2);
+}
+.ac-loc {
+  font-size: 12px; font-weight: 500; color: var(--t0);
+  margin-bottom: 4px; letter-spacing: -0.01em;
+}
+.ac-metrics {
+  display: flex; flex-wrap: wrap; gap: 14px;
+  font-family: var(--mono); font-size: 10px; color: var(--t2);
+  margin-bottom: 2px;
+}
+.ac-metrics em {
+  font-style: normal; color: var(--t0); font-weight: 500;
+}
+.ac-narr {
+  font-size: 10px; color: var(--t1); line-height: 1.6;
+  padding-top: 6px; border-top: 1px solid var(--bd-0);
+  margin-top: 6px;
+}
 
-/* Hist banner */
-.hist-banner { display: flex; align-items: center; gap: 10px; padding: 7px 12px; background: rgba(91,120,255,0.06); border: 1px solid rgba(91,120,255,0.18); border-radius: var(--r); margin-bottom: 10px; font-family: var(--mono); font-size: 10px; color: #8090cc; }
+/* === MAP === */
+.map-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding-bottom: 10px; border-bottom: 1px solid var(--bd-1);
+  margin-bottom: 10px;
+}
+.map-title {
+  font-size: 8px; font-weight: 600; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--t2);
+}
+.map-mode {
+  font-size: 10px; font-weight: 500; color: var(--t0);
+  margin-top: 3px;
+}
+.map-ts { font-family: var(--mono); font-size: 9px; color: var(--t2); }
+.map-legend {
+  display: flex; gap: 20px; flex-wrap: wrap;
+  padding-top: 10px; border-top: 1px solid var(--bd-0);
+  font-size: 9px; font-weight: 500; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--t2);
+}
+.leg { display: flex; align-items: center; gap: 5px; }
+.leg-sq {
+  width: 7px; height: 7px; flex-shrink: 0;
+}
 
-/* Legend */
-.legend-row { display: flex; gap: 18px; padding-top: 8px; border-top: 1px solid var(--border-0); font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-2); }
-.leg-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+.hist-mode-bar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 7px 12px; margin-bottom: 10px;
+  background: rgba(61,125,200,0.05);
+  border: 1px solid rgba(61,125,200,0.14);
+  border-radius: var(--r);
+  font-family: var(--mono); font-size: 9px; color: #6080b0;
+}
+.hist-mode-bar b { color: #8090cc; font-weight: 500; }
 
-/* Sidebar labels */
-.sb-sec { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-2); margin: 14px 0 6px; }
+/* === TIMELINE === */
+.tl-section {
+  font-size: 8px; font-weight: 600; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--t2);
+  padding-bottom: 10px; border-bottom: 1px solid var(--bd-1);
+  margin-bottom: 14px;
+}
 
-/* Critical notice */
-.crit-notice { padding: 10px 14px; background: var(--cr-a); border: 1px solid var(--cr-b); border-radius: var(--r); margin-bottom: 10px; }
-.crit-notice-hed { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--cr); margin-bottom: 3px; }
-.crit-notice-body { font-size: 11px; color: rgba(229,57,53,0.65); }
+.tl-strip-wrap {
+  display: flex; gap: 4px; margin-bottom: 18px; overflow-x: auto;
+  padding-bottom: 4px;
+}
+.tl-day-block {
+  flex-shrink: 0; width: 54px; padding: 7px 4px 6px;
+  border-radius: var(--r); text-align: center; cursor: pointer;
+  border: 1px solid transparent;
+  transition: filter 0.1s;
+}
+.tl-day-block:hover { filter: brightness(1.25); }
+.tl-day-n  { font-family: var(--mono); font-size: 14px; font-weight: 400; line-height: 1; }
+.tl-day-d  { font-size: 8px; letter-spacing: 0.08em; text-transform: uppercase; margin-top: 3px; opacity: 0.6; }
+.tl-day-ct { font-size: 8px; font-family: var(--mono); margin-top: 3px; opacity: 0.5; }
 
-/* High notice */
-.high-notice { padding: 10px 14px; background: var(--hi-a); border: 1px solid var(--hi-b); border-radius: var(--r); margin-bottom: 10px; }
-.high-notice-hed { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--hi); margin-bottom: 3px; }
-.high-notice-body { font-size: 11px; color: rgba(239,108,0,0.65); }
+.tl-CRITICAL { background: var(--cr-a); border-color: var(--cr-b); color: var(--cr); }
+.tl-HIGH     { background: var(--hi-a); border-color: var(--hi-b); color: var(--hi); }
+.tl-MODERATE { background: var(--me-a); border-color: var(--me-b); color: var(--me); }
+.tl-LOW      { background: var(--lo-a); border-color: var(--lo-b); color: var(--lo); }
+.tl-selected { outline: 1px solid rgba(255,255,255,0.3); outline-offset: 2px; }
 
-/* Timeline calendar */
-.tl-cal { border-collapse: separate; border-spacing: 3px; margin: 8px auto; }
-.tl-cal th { color: var(--text-2); font-size: 9px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; padding: 4px 6px; text-align: center; }
-.tl-cal td { width: 44px; height: 44px; text-align: center; border-radius: var(--r); font-size: 12px; vertical-align: middle; cursor: default; transition: filter .1s; }
+/* Calendar */
+.tl-cal { border-collapse: separate; border-spacing: 2px; }
+.tl-cal th {
+  color: var(--t2); font-size: 8px; font-weight: 600;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  padding: 4px 6px; text-align: center;
+}
+.tl-cal td {
+  width: 40px; height: 38px; text-align: center; border-radius: var(--r);
+  font-size: 11px; font-family: var(--mono); vertical-align: middle;
+  cursor: default; transition: filter 0.1s;
+}
 .tl-cal td:hover { filter: brightness(1.3); }
-.tl-CRITICAL { background: var(--cr-a); color: var(--cr); border: 1px solid var(--cr-b); }
-.tl-HIGH     { background: var(--hi-a); color: var(--hi); border: 1px solid var(--hi-b); }
-.tl-MODERATE { background: var(--me-a); color: var(--me); border: 1px solid var(--me-b); }
-.tl-LOW      { background: var(--lo-a); color: var(--lo); border: 1px solid var(--lo-b); }
-.tl-none     { color: var(--text-2); }
-.tl-selected { outline: 2px solid rgba(255,255,255,0.35) !important; outline-offset: 1px; }
+.tl-cal-none { color: var(--t2); }
+.tl-cal-sel  { outline: 1px solid rgba(255,255,255,0.25); outline-offset: 1px; }
 
+/* Stat blocks for timeline */
+.tl-stats {
+  display: flex; gap: 0; margin-bottom: 18px;
+  border: 1px solid var(--bd-1); border-radius: var(--r); overflow: hidden;
+}
+.tl-stat {
+  flex: 1; padding: 12px 14px; border-right: 1px solid var(--bd-0);
+}
+.tl-stat:last-child { border-right: none; }
+.tl-stat-label {
+  font-size: 8px; font-weight: 600; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--t2); margin-bottom: 5px;
+}
+.tl-stat-val {
+  font-family: var(--mono); font-size: 18px; font-weight: 400;
+  color: var(--t0); letter-spacing: -0.02em;
+}
+.tl-stat-val-cr { color: var(--cr); }
+
+.tl-alert-panel {
+  padding: 10px 14px; border-radius: var(--r); margin-bottom: 14px;
+}
+.tl-alert-cr {
+  background: var(--cr-a); border: 1px solid var(--cr-b);
+}
+.tl-alert-hi {
+  background: var(--hi-a); border: 1px solid var(--hi-b);
+}
+.tl-alert-head {
+  font-size: 8px; font-weight: 700; letter-spacing: 0.14em;
+  text-transform: uppercase; margin-bottom: 3px;
+}
+.tl-alert-cr .tl-alert-head { color: var(--cr); }
+.tl-alert-hi .tl-alert-head { color: var(--hi); }
+.tl-alert-body { font-size: 10px; color: var(--t1); }
+
+/* Playback */
+.tl-play-state {
+  padding: 8px 14px; border-radius: var(--r);
+  background: rgba(61,125,200,0.06); border: 1px solid rgba(61,125,200,0.14);
+  font-family: var(--mono); font-size: 10px; color: #6080b0;
+  margin-bottom: 10px;
+}
+
+/* === SECTION LABEL === */
+.sec-label {
+  font-size: 8px; font-weight: 600; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--t2);
+  padding-bottom: 10px; border-bottom: 1px solid var(--bd-1);
+  margin-bottom: 14px;
+}
+
+/* === GIS / TABLE / CODE === */
+[data-testid="stDataFrame"] { border-radius: var(--r) !important; }
+[data-testid="stCodeBlock"] pre { font-family: var(--mono) !important; font-size: 11px !important; }
+
+/* === DOWNLOAD BUTTON === */
+[data-testid="stDownloadButton"] > button {
+  background: var(--bg-3) !important;
+  color: var(--t1) !important;
+  border: 1px solid var(--bd-1) !important;
+  border-radius: var(--r) !important;
+  font-family: var(--font) !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  transition: border-color 0.12s, color 0.12s;
+}
+[data-testid="stDownloadButton"] > button:hover {
+  border-color: var(--bd-2) !important; color: var(--t0) !important;
+}
+
+/* === PS CLASSIFICATION PANELS === */
+.ps-class-panel {
+  padding: 16px 18px; border-radius: var(--r);
+  border: 1px solid var(--bd-1);
+}
+.ps-class-panel + .ps-class-panel { margin-top: 0; }
+.ps-class-head {
+  font-size: 8px; font-weight: 700; letter-spacing: 0.16em;
+  text-transform: uppercase; margin-bottom: 4px;
+}
+.ps-class-count {
+  font-family: var(--mono); font-size: 28px; font-weight: 300;
+  letter-spacing: -0.03em; margin-bottom: 10px; line-height: 1;
+}
+.ps-class-body { font-size: 11px; color: var(--t1); line-height: 1.7; }
+
+.ps-cr { border-color: var(--cr-b); background: var(--cr-a); }
+.ps-cr .ps-class-head { color: var(--cr); }
+.ps-cr .ps-class-count { color: var(--cr); }
+
+.ps-hi { border-color: var(--hi-b); background: var(--hi-a); }
+.ps-hi .ps-class-head { color: var(--hi); }
+.ps-hi .ps-class-count { color: var(--hi); }
+
+.ps-lo { border-color: var(--lo-b); background: var(--lo-a); }
+.ps-lo .ps-class-head { color: var(--lo); }
+.ps-lo .ps-class-count { color: var(--lo); }
+
+/* === ANIMATION === */
 @keyframes pulse-live {
-  0%   { box-shadow: 0 0 0 0 rgba(67,160,71,0.5); }
-  70%  { box-shadow: 0 0 0 5px rgba(67,160,71,0); }
-  100% { box-shadow: 0 0 0 0 rgba(67,160,71,0); }
+  0%   { box-shadow: 0 0 0 0 rgba(45,138,45,0.6); }
+  70%  { box-shadow: 0 0 0 5px rgba(45,138,45,0); }
+  100% { box-shadow: 0 0 0 0 rgba(45,138,45,0); }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -206,81 +579,93 @@ def load_incidents():
     return pd.read_parquet(INCIDENT_SCORES)
 
 
-def _class_tag(output_class: str) -> str:
-    css = {
-        OUTPUT_CLASS_INDUSTRIAL_FIRE:    "cls-fire",
-        OUTPUT_CLASS_PERSISTENT_SOURCE:  "cls-source",
-        OUTPUT_CLASS_NATURAL_FIRE:       "cls-natural",
-    }.get(output_class, "")
-    em, _, short = OUTPUT_CLASS_CFG.get(output_class, ("", [], output_class))
-    return f'<span class="cls-tag {css}">{short}</span>'
-
-
+# ── Helper renderers ───────────────────────────────────────────────────────────
 def _alert_card(a: dict) -> str:
-    sev = a["severity"]
-    status_text = STATUS_BADGE.get(a["status"], a["status"])
-    city = a.get("nearest_city", "—")
+    sev       = a["severity"]
+    status    = a.get("status", "")
+    city      = a.get("nearest_city", "—")
     city_dist = a.get("dist_nearest_city_km", 0)
-    frp = a.get("frp_mw", 0)
-    persist = a.get("persistence_count", 1)
-    dist_fac = a.get("dist_nearest_facility_km", 0)
-    risk = a.get("risk_score", 0)
-    acq = a.get("acq_date", "")
-    night = "N" if a.get("day_night") == "N" else "D"
-    output_class = a.get("output_class", "")
+    frp       = a.get("frp_mw", 0)
+    persist   = a.get("persistence_count", 1)
+    dist_fac  = a.get("dist_nearest_facility_km", 0)
+    haz       = a.get("hazard_facility_type", "—")
+    risk      = a.get("risk_score", 0)
+    acq       = a.get("acq_date", "")
+    day_night = a.get("day_night", "D")
+    oc        = a.get("output_class", "")
     narrative = a.get("narrative", "")
-    lat = a.get("lat", 0)
-    lon = a.get("lon", 0)
-    haz = a.get("hazard_facility_type", "—")
-    land = a.get("land_cover_context", "—")
+    lat       = a.get("lat", 0)
+    lon       = a.get("lon", 0)
+    land      = a.get("land_cover_context", "—")
+
+    type_label = _TYPE_SHORT.get(oc, oc)
+    dn_label   = "Night" if day_night == "N" else "Day"
+    narr_html  = (
+        f'<div class="ac-narr">{narrative}</div>'
+        if narrative else ""
+    )
 
     return f"""
 <div class="ac">
-  <div class="ac-row1">
-    <span class="sev-badge sev-{sev}">{sev}</span>
-    {_class_tag(output_class)}
-    <span style="font-size:9px;color:var(--text-2);font-family:var(--mono);letter-spacing:0.04em;margin-left:auto">{status_text} · {acq}</span>
+  <div class="ac-head">
+    <span class="ac-sev sev-{sev}">{sev}</span>
+    <span class="ac-type">{type_label}</span>
+    <span class="ac-right">
+      <span class="ac-status status-{status}">{status}</span>
+      <span class="ac-date">{acq}</span>
+    </span>
   </div>
-  <div class="ac-loc">{lat:.4f}°N, {lon:.4f}°E · {city} ({city_dist:.0f} km)</div>
-  <div class="ac-meta">
-    <span>FRP <b style="color:var(--text-0)">{frp:.1f}</b> MW</span>
-    <span>Persist <b style="color:var(--text-0)">{persist}×</b></span>
-    <span>{dist_fac:.1f} km to {haz}</span>
-    <span>Risk <b style="color:var(--text-0)">{risk}</b>/100</span>
-    <span>{'🌙' if night=='N' else '☀'} {land}</span>
+  <div class="ac-loc">{lat:.4f}°N {lon:.4f}°E &nbsp;·&nbsp; {city} ({city_dist:.0f} km)</div>
+  <div class="ac-metrics">
+    <span>FRP <em>{frp:.1f}</em> MW</span>
+    <span>Persist <em>{persist}</em>&times;</span>
+    <span>Risk <em>{risk}</em>/100</span>
+    <span>{haz} &nbsp;{dist_fac:.1f} km</span>
+    <span>{dn_label} &nbsp;&middot;&nbsp; {land}</span>
   </div>
-  <div class="ac-narr">{narrative}</div>
+  {narr_html}
 </div>"""
+
+
+def _sev_section_head(sev: str, count: int) -> str:
+    cls_map = {"CRITICAL": "cr", "HIGH": "hi", "MEDIUM": "me", "LOW": "lo"}
+    cls = cls_map.get(sev, "lo")
+    return (
+        f'<div class="sev-head sev-head-{cls}">'
+        f'{sev}<span class="sev-head-ct">· {count}</span>'
+        f'</div>'
+    )
 
 
 # ── GeoJSON export ─────────────────────────────────────────────────────────────
 def _alerts_to_geojson(alerts: list[dict]) -> str:
-    """Convert alert list to GeoJSON FeatureCollection (GIS deliverable ii)."""
     features = []
     for a in alerts:
         features.append({
             "type": "Feature",
             "geometry": {"type": "Point", "coordinates": [a["lon"], a["lat"]]},
             "properties": {
-                "alert_id":            a["alert_id"],
-                "output_class":        a.get("output_class", ""),
-                "severity":            a["severity"],
-                "status":              a["status"],
-                "risk_score":          a["risk_score"],
-                "land_cover_context":  a.get("land_cover_context", ""),
-                "hazard_facility_type":a.get("hazard_facility_type", ""),
-                "frp_mw":              a["frp_mw"],
-                "persistence_count":   a["persistence_count"],
-                "dist_facility_km":    a["dist_nearest_facility_km"],
-                "nearest_city":        a.get("nearest_city", ""),
-                "acq_date":            a.get("acq_date", ""),
-                "narrative":           a.get("narrative", ""),
+                "alert_id":             a["alert_id"],
+                "output_class":         a.get("output_class", ""),
+                "severity":             a["severity"],
+                "status":               a["status"],
+                "risk_score":           a["risk_score"],
+                "land_cover_context":   a.get("land_cover_context", ""),
+                "hazard_facility_type": a.get("hazard_facility_type", ""),
+                "frp_mw":               a["frp_mw"],
+                "persistence_count":    a["persistence_count"],
+                "dist_facility_km":     a["dist_nearest_facility_km"],
+                "nearest_city":         a.get("nearest_city", ""),
+                "acq_date":             a.get("acq_date", ""),
+                "narrative":            a.get("narrative", ""),
             },
         })
     return json.dumps({"type": "FeatureCollection", "features": features}, indent=2)
 
 
-# ── Map layers ────────────────────────────────────────────────────────────────
+# ── Map ────────────────────────────────────────────────────────────────────────
+_SEV_OPACITY = {"CRITICAL": 0.90, "HIGH": 0.72, "MEDIUM": 0.54, "LOW": 0.38}
+
 def _build_map(scored: pd.DataFrame, incidents: pd.DataFrame,
                show_incidents: bool, colour_by: str) -> pdk.Deck:
     layers = []
@@ -289,322 +674,481 @@ def _build_map(scored: pd.DataFrame, incidents: pd.DataFrame,
         df = scored.copy()
         if colour_by == "Output Class (PS classification)":
             df["color"] = df["output_class"].map(
-                {k: v[1] for k, v in OUTPUT_CLASS_CFG.items()}
+                {k: v[0] for k, v in OUTPUT_CLASS_CFG.items()}
             )
-        else:  # severity
-            sev_color = {"CRITICAL":[220,20,20,240],"HIGH":[255,110,0,220],
-                         "MEDIUM":[255,210,0,190],"LOW":[80,200,80,160]}
+        else:
+            sev_color = {
+                "CRITICAL": [220, 20,  20, 230],
+                "HIGH":     [217, 119,  6, 200],
+                "MEDIUM":   [181, 134, 13, 170],
+                "LOW":      [ 45, 138, 45, 140],
+            }
             df["color"] = df["severity"].map(sev_color)
 
-        df["radius"] = df["risk_score"].apply(lambda s: 5000 + s * 90)
+        df["radius"] = df["risk_score"].apply(lambda s: 4500 + s * 80)
         df["tip"] = df.apply(lambda r: (
-            f"{OUTPUT_CLASS_CFG.get(r['output_class'],('⚪',[],r['output_class']))[0]} "
-            f"{r.get('output_class','')}\n"
-            f"Severity: {r.get('severity','')} | Score: {r.get('risk_score',0)}\n"
-            f"FRP {r['frp_mw']:.1f} MW · Persist {r['persistence_count']}× · "
-            f"{r['dist_nearest_facility_km']:.1f} km from facility\n"
-            f"Land cover: {r.get('land_cover_context','')}\n"
-            f"Facility: {r.get('hazard_facility_type','')}"
+            f"{_TYPE_SHORT.get(r['output_class'], r['output_class'])}\n"
+            f"Severity: {r.get('severity','')}  Score: {r.get('risk_score',0)}\n"
+            f"FRP {r['frp_mw']:.1f} MW  Persist {r['persistence_count']}x\n"
+            f"Facility: {r.get('hazard_facility_type','')}  ({r['dist_nearest_facility_km']:.1f} km)\n"
+            f"Land: {r.get('land_cover_context','')}"
         ), axis=1)
         layers.append(pdk.Layer("ScatterplotLayer", data=df,
-            get_position=["lon","lat"], get_color="color", get_radius="radius",
+            get_position=["lon", "lat"], get_color="color", get_radius="radius",
             pickable=True, opacity=0.85))
 
     if show_incidents and not incidents.empty:
         inc = incidents.copy()
-        inc["color"] = [[255,255,255,230]] * len(inc)
+        inc["color"] = [[220, 220, 220, 200]] * len(inc)
         inc["tip"] = inc.apply(lambda r: (
-            f"📌 {r['incident_id']}: {r['name']}\n"
-            f"Date: {r['date']} | Facility: {r.get('facility_type','?')}\n"
-            f"Anomaly: {'✅ YES' if r['anomaly_flag'] else 'no'} | "
+            f"{r['incident_id']}: {r['name']}\n"
+            f"Date: {r['date']}  Facility: {r.get('facility_type','?')}\n"
+            f"Anomaly flag: {'YES' if r['anomaly_flag'] else 'no'}  "
             f"prob_A={r['prob_A']:.2f}"
         ), axis=1)
         layers.append(pdk.Layer("ScatterplotLayer", data=inc,
-            get_position=["lon","lat"], get_color="color", get_radius=20000,
-            pickable=True, opacity=1.0, stroked=True,
-            get_line_color=[255,255,255], line_width_min_pixels=2))
+            get_position=["lon", "lat"], get_color="color", get_radius=18000,
+            pickable=True, opacity=0.95, stroked=True,
+            get_line_color=[200, 200, 200], line_width_min_pixels=1))
 
     return pdk.Deck(
         layers=layers,
         initial_view_state=pdk.ViewState(latitude=22.0, longitude=82.0, zoom=4.5),
-        tooltip={"html":"<pre style='font-size:12px;color:white'>{tip}</pre>",
-                 "style":{"background":"rgba(0,0,0,0.85)","borderRadius":"6px","padding":"8px"}},
+        tooltip={
+            "html": "<pre style='font-family:IBM Plex Mono,monospace;font-size:11px;"
+                    "color:#e6e6e6;margin:0'>{tip}</pre>",
+            "style": {
+                "background": "rgba(10,10,10,0.92)",
+                "border": "1px solid rgba(255,255,255,0.10)",
+                "borderRadius": "2px",
+                "padding": "10px 12px",
+            },
+        },
         map_style="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
     )
 
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown('<div style="font-family:var(--mono);font-size:9px;font-weight:500;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-2);padding:4px 0 12px">SIH · 26162</div>', unsafe_allow_html=True)
-    st.markdown('<div style="font-size:13px;font-weight:700;color:var(--text-0);margin-bottom:2px">Fire Intelligence</div>', unsafe_allow_html=True)
-    st.markdown('<div style="font-size:10px;color:var(--text-2);margin-bottom:14px">AI-Based Detection Platform</div>', unsafe_allow_html=True)
-    st.divider()
-
-    st.markdown('<div class="sb-sec">Severity</div>', unsafe_allow_html=True)
-    sev_filter = st.multiselect("Severity", ["CRITICAL","HIGH","MEDIUM","LOW"],
-        default=["CRITICAL","HIGH","MEDIUM","LOW"], label_visibility="collapsed")
-
-    st.markdown('<div class="sb-sec">Status</div>', unsafe_allow_html=True)
-    status_filter = st.multiselect("Status", alert_store.LIFECYCLE_STATES,
-        default=["DETECTED","VALIDATING","ALERTED","ESCALATED","MONITORING"],
-        label_visibility="collapsed")
-
-    show_incidents = st.checkbox("Show confirmed incident sites", value=True)
-    colour_by = st.radio("Map colour by",
-        ["Output Class (PS classification)", "Alert Severity"], index=0)
-
-    st.divider()
-    st.markdown('<div class="sb-sec">Pipeline</div>', unsafe_allow_html=True)
-    if st.button("Re-run pipeline", use_container_width=True):
-        with st.spinner("Running …"):
-            r = run_pipeline(fresh=True)
-            load_scored.clear(); load_incidents.clear()
-        st.success(f"Done — CRITICAL:{r['counts']['CRITICAL']} HIGH:{r['counts']['HIGH']}")
-        st.rerun()
-
-    st.divider()
-    st.markdown('<div class="sb-sec">PS Output Classes</div>', unsafe_allow_html=True)
     st.markdown("""
-<div style="font-size:10px;color:var(--text-1);line-height:1.7">
-<span style="color:var(--cr)">■</span> <b style="color:var(--text-0)">Industrial Fire</b><br>
-Accidental fires, gas leaks, explosions, abnormal thermal events.<br><br>
-<span style="color:var(--hi)">■</span> <b style="color:var(--text-0)">Persistent Source</b><br>
-Continuous industrial heat: gas flares, refineries, steel plants, kilns.<br><br>
-<span style="color:var(--lo)">■</span> <b style="color:var(--text-0)">Natural Fire</b><br>
-Wildfires, paddy-stubble burning, savanna fires.<br><br>
-<span style="color:#fff">■</span> <b style="color:var(--text-0)">Confirmed incident site</b> (past events)
+<div class="sb-inner">
+  <div class="sb-product">
+    <div class="sb-product-id">SIH · 26162</div>
+    <div class="sb-product-name">Fire Intelligence</div>
+    <div class="sb-product-sub">AI Thermal Anomaly Detection</div>
+  </div>
 </div>
 """, unsafe_allow_html=True)
 
-    st.divider()
+    with st.container():
+        st.markdown('<div style="padding:0 16px">', unsafe_allow_html=True)
+
+        st.markdown('<div class="sb-section">Severity Filter</div>', unsafe_allow_html=True)
+        sev_filter = st.multiselect(
+            "Severity", ["CRITICAL", "HIGH", "MEDIUM", "LOW"],
+            default=["CRITICAL", "HIGH", "MEDIUM", "LOW"],
+            label_visibility="collapsed",
+        )
+
+        st.markdown('<div class="sb-section">Status Filter</div>', unsafe_allow_html=True)
+        status_filter = st.multiselect(
+            "Status", alert_store.LIFECYCLE_STATES,
+            default=["DETECTED", "VALIDATING", "ALERTED", "ESCALATED", "MONITORING"],
+            label_visibility="collapsed",
+        )
+
+        st.markdown('<div class="sb-section">Map Options</div>', unsafe_allow_html=True)
+        show_incidents = st.checkbox("Confirmed incident sites", value=True)
+        colour_by = st.radio(
+            "Colour by",
+            ["Output Class (PS classification)", "Alert Severity"],
+            index=0,
+            label_visibility="collapsed",
+        )
+
+        st.markdown('<div class="sb-section">Pipeline</div>', unsafe_allow_html=True)
+        if st.button("Re-run detection pipeline", use_container_width=True):
+            with st.spinner("Running pipeline…"):
+                r = run_pipeline(fresh=True)
+                load_scored.clear()
+                load_incidents.clear()
+            st.success(
+                f"Done — CRITICAL: {r['counts']['CRITICAL']}  HIGH: {r['counts']['HIGH']}"
+            )
+            st.rerun()
+
+        st.markdown('</div>', unsafe_allow_html=True)
+
     st.markdown("""
-<div style="font-size:9px;color:var(--text-2);line-height:1.7;font-family:var(--mono)">
-Data: NASA FIRMS VIIRS 375m · VNF Gas Flare Catalogue · WRI GPPD · OpenStreetMap<br>
-Model: RandomForest trained globally, India holdout.<br>
-Framing: anomalous departure from known patterns — not confirmed fire detection.
+<div class="sb-data">
+  NASA FIRMS VIIRS 375m · VNF Gas Flare Catalogue<br>
+  WRI GPPD · OpenStreetMap Industrial · OSM India<br>
+  Model: RandomForest · India holdout withheld<br>
+  Framing: anomalous departure from known patterns
 </div>
 """, unsafe_allow_html=True)
 
 
-# ── Header ─────────────────────────────────────────────────────────────────────
-scored_df = load_scored()
-daily_summary = get_daily_summary()  # timeline aggregation
-c = alert_store.counts()
-now_str = datetime.now(timezone.utc).strftime("%H:%M UTC")
+# ── Data ───────────────────────────────────────────────────────────────────────
+scored_df    = load_scored()
+daily_summary = get_daily_summary()
+c            = alert_store.counts()
+now_str      = datetime.now(timezone.utc).strftime("%H:%M UTC")
+
+
+# ── System bar ─────────────────────────────────────────────────────────────────
+st.markdown(f"""
+<div class="sys-bar">
+  <div class="sys-bar-left">
+    <div class="sys-bar-id">SIH · 26162 · India Fire Intelligence Platform</div>
+    <div class="sys-bar-title">Industrial Fire &amp; Thermal Anomaly Detection</div>
+    <div class="sys-bar-sub">
+      NASA FIRMS VIIRS 375m &nbsp;·&nbsp; AI Classifier &nbsp;·&nbsp;
+      Risk Engine &nbsp;·&nbsp; GIS Export
+    </div>
+  </div>
+  <div class="sys-bar-live">
+    <div class="live-dot"></div>
+    LIVE &nbsp;·&nbsp; {now_str} &nbsp;·&nbsp; NRT
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+
+# ── Status strip ───────────────────────────────────────────────────────────────
+n_industrial = (
+    int((scored_df["output_class"] == OUTPUT_CLASS_INDUSTRIAL_FIRE).sum())
+    if not scored_df.empty else 0
+)
+n_persistent = (
+    int((scored_df["output_class"] == OUTPUT_CLASS_PERSISTENT_SOURCE).sum())
+    if not scored_df.empty else 0
+)
+n_natural = (
+    int((scored_df["output_class"] == OUTPUT_CLASS_NATURAL_FIRE).sum())
+    if not scored_df.empty else 0
+)
+
+cr_cls = "ss-val-cr" if c["CRITICAL"] > 0 else ""
+hi_cls = "ss-val-hi" if c["HIGH"] > 0 else ""
 
 st.markdown(f"""
-<div class="sys-header" style="display:flex;align-items:flex-start;justify-content:space-between;padding-bottom:14px;border-bottom:1px solid var(--border-1);margin-bottom:18px">
-  <div>
-    <div style="font-family:var(--mono);font-size:9px;font-weight:500;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-2);margin-bottom:4px">SIH · 26162 · India Fire Intelligence</div>
-    <div style="font-size:18px;font-weight:700;letter-spacing:-0.02em;color:var(--text-0);line-height:1.2;font-family:var(--font)">Industrial Fire &amp; Thermal Anomaly Detection</div>
-    <div style="font-size:11px;color:var(--text-2);margin-top:4px;font-family:var(--font)">NASA FIRMS VIIRS 375m · AI Classifier · Risk Engine · GIS Export</div>
+<div class="status-strip">
+  <div class="ss-item">
+    <div class="ss-label">Active Alerts</div>
+    <div class="ss-val">{c['active']}</div>
   </div>
-  <div style="display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:10px;color:var(--text-2);margin-top:3px">
-    <div style="width:6px;height:6px;border-radius:50%;background:var(--lo);animation:pulse-live 2s infinite;flex-shrink:0"></div>
-    LIVE · {now_str} · NRT
+  <div class="ss-item">
+    <div class="ss-label">Critical</div>
+    <div class="ss-val {cr_cls}">{c['CRITICAL']}</div>
+  </div>
+  <div class="ss-item">
+    <div class="ss-label">High</div>
+    <div class="ss-val {hi_cls}">{c['HIGH']}</div>
+  </div>
+  <div class="ss-item">
+    <div class="ss-label">Industrial Fire</div>
+    <div class="ss-val">{n_industrial}</div>
+    <div class="ss-sub">PS Class A</div>
+  </div>
+  <div class="ss-item">
+    <div class="ss-label">Persistent Source</div>
+    <div class="ss-val">{n_persistent}</div>
+    <div class="ss-sub">PS Class B</div>
+  </div>
+  <div class="ss-item">
+    <div class="ss-label">Natural Fire</div>
+    <div class="ss-val">{n_natural}</div>
+    <div class="ss-sub">PS Class C</div>
   </div>
 </div>
 """, unsafe_allow_html=True)
 
-# ── Stats bar — PS output class counts ────────────────────────────────────────
-n_industrial = int((scored_df["output_class"]==OUTPUT_CLASS_INDUSTRIAL_FIRE).sum()) if not scored_df.empty else 0
-n_persistent = int((scored_df["output_class"]==OUTPUT_CLASS_PERSISTENT_SOURCE).sum()) if not scored_df.empty else 0
-n_natural = int((scored_df["output_class"]==OUTPUT_CLASS_NATURAL_FIRE).sum()) if not scored_df.empty else 0
-
-st.markdown(f"""
-<div style="display:flex;border-bottom:1px solid var(--border-1);margin-bottom:20px">
-  <div style="flex:1;padding:10px 20px 12px 0;border-right:1px solid var(--border-0)">
-    <div style="font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-2);margin-bottom:4px">Active Alerts</div>
-    <div style="font-family:var(--mono);font-size:22px;font-weight:500;letter-spacing:-0.03em;color:var(--text-0);line-height:1">{c['active']}</div>
-  </div>
-  <div style="flex:1;padding:10px 20px 12px;border-right:1px solid var(--border-0)">
-    <div style="font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-2);margin-bottom:4px">Critical</div>
-    <div style="font-family:var(--mono);font-size:22px;font-weight:500;letter-spacing:-0.03em;color:{'var(--cr)' if c['CRITICAL'] > 0 else 'var(--text-0)'};line-height:1">{c['CRITICAL']}</div>
-  </div>
-  <div style="flex:1;padding:10px 20px 12px;border-right:1px solid var(--border-0)">
-    <div style="font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-2);margin-bottom:4px">High</div>
-    <div style="font-family:var(--mono);font-size:22px;font-weight:500;letter-spacing:-0.03em;color:{'var(--hi)' if c['HIGH'] > 0 else 'var(--text-0)'};line-height:1">{c['HIGH']}</div>
-  </div>
-  <div style="flex:1;padding:10px 20px 12px;border-right:1px solid var(--border-0)">
-    <div style="font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-2);margin-bottom:4px">Industrial Fire</div>
-    <div style="font-family:var(--mono);font-size:22px;font-weight:500;letter-spacing:-0.03em;color:var(--text-0);line-height:1">{n_industrial}</div>
-  </div>
-  <div style="flex:1;padding:10px 20px 12px;border-right:1px solid var(--border-0)">
-    <div style="font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-2);margin-bottom:4px">Persistent Sources</div>
-    <div style="font-family:var(--mono);font-size:22px;font-weight:500;letter-spacing:-0.03em;color:var(--text-0);line-height:1">{n_persistent}</div>
-  </div>
-  <div style="flex:1;padding:10px 0 12px 20px">
-    <div style="font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-2);margin-bottom:4px">Natural Fire</div>
-    <div style="font-family:var(--mono);font-size:22px;font-weight:500;letter-spacing:-0.03em;color:var(--text-0);line-height:1">{n_natural}</div>
-  </div>
-</div>
-""", unsafe_allow_html=True)
 
 # ── Apply timeline date filter ─────────────────────────────────────────────────
 _tl_s = st.session_state.tl_start
 _tl_e = st.session_state.tl_end
 if _tl_s and _tl_e and not scored_df.empty:
-    _mask = (scored_df["acq_date"] >= _tl_s.isoformat()) & \
-            (scored_df["acq_date"] <= _tl_e.isoformat())
+    _mask = (
+        (scored_df["acq_date"] >= _tl_s.isoformat()) &
+        (scored_df["acq_date"] <= _tl_e.isoformat())
+    )
     map_df = scored_df[_mask]
 else:
     map_df = scored_df
 
-# ── Main layout: alerts + map ──────────────────────────────────────────────────
-col_alert, col_map = st.columns([1, 1.6], gap="medium")
 
+# ── Main layout: alert feed + map ─────────────────────────────────────────────
+col_alert, col_map = st.columns([1, 1.65], gap="medium")
+
+# ── Alert feed ─────────────────────────────────────────────────────────────────
 with col_alert:
     alerts = alert_store.get_alerts(
         severity=sev_filter or None,
         status=status_filter or None,
     )
-    # Apply date filter in Python — avoids any signature-change risk on cloud
+    # Apply date filter in Python (avoids any signature-change risk on cloud)
     if _tl_s and _tl_e:
         _s_iso, _e_iso = _tl_s.isoformat(), _tl_e.isoformat()
         alerts = [a for a in alerts if _s_iso <= a.get("acq_date", "") <= _e_iso]
-    _feed_extra = ""
-    if _tl_s:
-        _range_str = (_tl_s.strftime("%b %d") if _tl_s == _tl_e
-                      else f"{_tl_s.strftime('%b %d')} – {_tl_e.strftime('%b %d, %Y')}")
-        _feed_extra = f' &nbsp;·&nbsp; <span style="color:var(--text-2);font-family:var(--mono)">{_range_str}</span>'
-    st.markdown(f'<div class="sec-head">Alert Feed &nbsp;·&nbsp; <span style="color:var(--text-1)">{len(alerts)}</span>{_feed_extra}</div>', unsafe_allow_html=True)
 
-    for sev in ["CRITICAL","HIGH","MEDIUM","LOW"]:
-        if sev not in sev_filter:
-            continue
-        sev_alerts = [a for a in alerts if a["severity"] == sev]
-        if not sev_alerts:
-            continue
-        with st.expander(
-            f"{SEVERITY_EMOJI[sev]} **{sev}** — {len(sev_alerts)} alerts",
-            expanded=(sev in ("CRITICAL","HIGH")),
-        ):
-            for a in sev_alerts[:20]:
-                st.markdown(_alert_card(a), unsafe_allow_html=True)
-                if sev in ("CRITICAL","HIGH") and a["status"] in ("ALERTED","ESCALATED"):
-                    b1, b2, b3 = st.columns(3)
-                    if b1.button("Acknowledge", key=f"ack_{a['alert_id']}"):
-                        alert_store.update_status(a["alert_id"], "MONITORING"); st.rerun()
-                    if b2.button("Escalate", key=f"esc_{a['alert_id']}"):
-                        alert_store.update_status(a["alert_id"], "ESCALATED"); st.rerun()
-                    if b3.button("Resolve", key=f"res_{a['alert_id']}"):
-                        alert_store.update_status(a["alert_id"], "EXTINGUISHED"); st.rerun()
-            if len(sev_alerts) > 20:
-                st.caption(f"… and {len(sev_alerts)-20} more")
-
-with col_map:
+    _date_meta = ""
     if _tl_s:
-        _range_lbl = (_tl_s.strftime("%b %d, %Y") if _tl_s == _tl_e
-                      else f"{_tl_s.strftime('%b %d')} – {_tl_e.strftime('%b %d, %Y')}")
-        st.markdown(
-            f'<div class="hist-banner">&#9632; HISTORICAL VIEW &nbsp;·&nbsp; {_range_lbl} &nbsp;·&nbsp; {len(map_df):,} detections</div>',
-            unsafe_allow_html=True,
+        _rng = (
+            _tl_s.strftime("%b %d")
+            if _tl_s == _tl_e
+            else f"{_tl_s.strftime('%b %d')} – {_tl_e.strftime('%b %d')}"
         )
-        map_title_label = "Historical Detection Map"
-    else:
-        map_title_label = "Live Detection Map — India"
+        _date_meta = f"&nbsp;·&nbsp; {_rng}"
 
     st.markdown(f"""
-<div class="map-bar">
-  <div class="map-bar-title">{map_title_label}</div>
-  <div class="map-bar-meta">VIIRS 375m · {now_str}</div>
+<div class="feed-header">
+  <div class="feed-title">Alert Feed</div>
+  <div class="feed-meta">{len(alerts)} shown{_date_meta}</div>
 </div>
 """, unsafe_allow_html=True)
 
-    incidents = load_incidents()
-    st.pydeck_chart(_build_map(map_df, incidents, show_incidents, colour_by),
-                    use_container_width=True, height=560)
+    with st.container(height=590, border=False):
+        if not alerts:
+            st.markdown(
+                '<div style="padding:24px 0;font-size:11px;color:var(--t2);text-align:center">'
+                'No alerts match the current filters.</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            for sev in ["CRITICAL", "HIGH", "MEDIUM", "LOW"]:
+                if sev not in sev_filter:
+                    continue
+                sev_alerts = [a for a in alerts if a["severity"] == sev]
+                if not sev_alerts:
+                    continue
 
-    st.markdown("""
-<div class="legend-row">
-  <span><span class="leg-dot" style="background:#dc1414"></span>Industrial Fire</span>
-  <span><span class="leg-dot" style="background:#ff8c00"></span>Persistent Source</span>
-  <span><span class="leg-dot" style="background:#32c850"></span>Natural Fire</span>
-  <span><span class="leg-dot" style="background:#fff"></span>Confirmed Incident</span>
+                st.markdown(_sev_section_head(sev, len(sev_alerts)), unsafe_allow_html=True)
+
+                for a in sev_alerts[:20]:
+                    st.markdown(_alert_card(a), unsafe_allow_html=True)
+                    if sev in ("CRITICAL", "HIGH") and a["status"] in ("ALERTED", "ESCALATED"):
+                        _b1, _b2, _b3 = st.columns(3)
+                        if _b1.button("Acknowledge", key=f"ack_{a['alert_id']}"):
+                            alert_store.update_status(a["alert_id"], "MONITORING")
+                            st.rerun()
+                        if _b2.button("Escalate", key=f"esc_{a['alert_id']}"):
+                            alert_store.update_status(a["alert_id"], "ESCALATED")
+                            st.rerun()
+                        if _b3.button("Resolve", key=f"res_{a['alert_id']}"):
+                            alert_store.update_status(a["alert_id"], "EXTINGUISHED")
+                            st.rerun()
+
+                if len(sev_alerts) > 20:
+                    st.markdown(
+                        f'<div style="font-size:9px;color:var(--t2);padding:6px 0">'
+                        f'+ {len(sev_alerts) - 20} more alerts</div>',
+                        unsafe_allow_html=True,
+                    )
+
+
+# ── Map ────────────────────────────────────────────────────────────────────────
+with col_map:
+    # Mode bar for historical view
+    if _tl_s:
+        _range_lbl = (
+            _tl_s.strftime("%b %d, %Y")
+            if _tl_s == _tl_e
+            else f"{_tl_s.strftime('%b %d')} – {_tl_e.strftime('%b %d, %Y')}"
+        )
+        st.markdown(
+            f'<div class="hist-mode-bar">'
+            f'HISTORICAL &nbsp;·&nbsp; <b>{_range_lbl}</b>'
+            f'&nbsp;·&nbsp; {len(map_df):,} detections'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+        _map_mode = "Historical Detection"
+    else:
+        _map_mode = "Live Detection"
+
+    st.markdown(f"""
+<div class="map-header">
+  <div>
+    <div class="map-title">Detection Map</div>
+    <div class="map-mode">{_map_mode} &nbsp;·&nbsp; India</div>
+  </div>
+  <div class="map-ts">VIIRS 375m &nbsp;·&nbsp; {now_str}</div>
 </div>
 """, unsafe_allow_html=True)
 
-# ── Tabs ──────────────────────────────────────────────────────────────────────
-tab_timeline, tab_gis, tab_ps, tab_inc, tab_model, tab_limits = st.tabs([
-    "📅 Historical Timeline",
-    "📥 GIS Export", "📋 PS Classification", "📌 Confirmed Incidents",
-    "🤖 Model Details", "⚠️ Limitations"
-])
-
-with tab_timeline:
-    st.markdown("### 📅 Historical Fire Timeline — Date Explorer")
-    st.caption(
-        "Select a date or range to explore how fire activity changed over time. "
-        "The map and alert feed above update automatically."
+    incidents_df = load_incidents()
+    st.pydeck_chart(
+        _build_map(map_df, incidents_df, show_incidents, colour_by),
+        use_container_width=True,
+        height=540,
     )
 
+    st.markdown("""
+<div class="map-legend">
+  <span class="leg">
+    <span class="leg-sq" style="background:#dc1414"></span>Industrial Fire
+  </span>
+  <span class="leg">
+    <span class="leg-sq" style="background:#d97706"></span>Persistent Source
+  </span>
+  <span class="leg">
+    <span class="leg-sq" style="background:#32c850"></span>Natural Fire
+  </span>
+  <span class="leg">
+    <span class="leg-sq" style="background:#dcdcdc;opacity:.7"></span>Confirmed Incident
+  </span>
+</div>
+""", unsafe_allow_html=True)
+
+
+# ── Tabs ───────────────────────────────────────────────────────────────────────
+tab_tl, tab_gis, tab_ps, tab_inc, tab_model, tab_limits = st.tabs([
+    "Timeline", "GIS Export", "Classification", "Incidents", "Model", "Limitations",
+])
+
+
+# ────────────────────────────────────────────────────────────────────────────────
+# TAB 1 — Historical Timeline
+# ────────────────────────────────────────────────────────────────────────────────
+with tab_tl:
+    st.markdown('<div class="sec-label">Historical Fire Timeline</div>', unsafe_allow_html=True)
+
     if daily_summary.empty:
-        st.info("No historical data yet. Run the pipeline to populate the alert database.")
+        st.markdown(
+            '<div style="padding:32px 0;text-align:center;font-size:11px;color:var(--t2)">'
+            'No historical data available.<br>Run the detection pipeline to populate the database.'
+            '</div>',
+            unsafe_allow_html=True,
+        )
     else:
-        _today = date.today()
+        _today    = date.today()
         _dates_iso = daily_summary["acq_date"].tolist()
         _min_date  = date.fromisoformat(_dates_iso[0])
         _max_date  = date.fromisoformat(_dates_iso[-1])
 
-        # ── Quick jump ────────────────────────────────────────────────────────
-        qc = st.columns(5)
-        if qc[0].button("Today",       use_container_width=True, key="tl_qj0"):
-            st.session_state.tl_start = _today
-            st.session_state.tl_end   = _today; st.rerun()
-        if qc[1].button("Last 24 h",   use_container_width=True, key="tl_qj1"):
-            st.session_state.tl_start = _today - timedelta(days=1)
-            st.session_state.tl_end   = _today; st.rerun()
-        if qc[2].button("Last 7 days", use_container_width=True, key="tl_qj2"):
-            st.session_state.tl_start = _today - timedelta(days=7)
-            st.session_state.tl_end   = _today; st.rerun()
-        if qc[3].button("Last 30 days",use_container_width=True, key="tl_qj3"):
-            st.session_state.tl_start = _today - timedelta(days=30)
-            st.session_state.tl_end   = _today; st.rerun()
-        if qc[4].button("Clear filter",use_container_width=True, key="tl_qj4",
-                         disabled=st.session_state.tl_start is None):
-            st.session_state.tl_start   = None
-            st.session_state.tl_end     = None
-            st.session_state.tl_playing = False
-            st.rerun()
+        # Top row: date selector + playback
+        _col_picker, _col_play = st.columns([1.6, 1], gap="medium")
 
-        # ── Date range picker (form prevents auto-trigger on render) ────────
-        with st.form("tl_date_form"):
-            _dr = st.date_input(
-                "Select date or date range",
-                value=(
-                    st.session_state.tl_start or _min_date,
-                    st.session_state.tl_end   or _max_date,
-                ),
-                min_value=_min_date,
-                max_value=max(_max_date, _today),
-            )
-            if st.form_submit_button("Apply date filter", use_container_width=True):
-                if isinstance(_dr, (list, tuple)) and len(_dr) == 2:
-                    st.session_state.tl_start = _dr[0]
-                    st.session_state.tl_end   = _dr[1]
-                elif isinstance(_dr, date):
-                    st.session_state.tl_start = _dr
-                    st.session_state.tl_end   = _dr
+        with _col_picker:
+            # Quick jump buttons
+            _jc = st.columns(5)
+            _qj_labels = ["Today", "Last 24h", "7 days", "30 days", "Clear"]
+            _qj_keys   = ["tl_q0", "tl_q1", "tl_q2", "tl_q3", "tl_q4"]
+            if _jc[0].button("Today",    key=_qj_keys[0], use_container_width=True):
+                st.session_state.tl_start = _today
+                st.session_state.tl_end   = _today; st.rerun()
+            if _jc[1].button("Last 24h", key=_qj_keys[1], use_container_width=True):
+                st.session_state.tl_start = _today - timedelta(days=1)
+                st.session_state.tl_end   = _today; st.rerun()
+            if _jc[2].button("7 days",   key=_qj_keys[2], use_container_width=True):
+                st.session_state.tl_start = _today - timedelta(days=7)
+                st.session_state.tl_end   = _today; st.rerun()
+            if _jc[3].button("30 days",  key=_qj_keys[3], use_container_width=True):
+                st.session_state.tl_start = _today - timedelta(days=30)
+                st.session_state.tl_end   = _today; st.rerun()
+            if _jc[4].button("Clear",    key=_qj_keys[4], use_container_width=True,
+                              disabled=st.session_state.tl_start is None):
+                st.session_state.tl_start   = None
+                st.session_state.tl_end     = None
+                st.session_state.tl_playing = False
                 st.rerun()
 
-        st.divider()
+            with st.form("tl_date_form"):
+                _dr = st.date_input(
+                    "Date range",
+                    value=(
+                        st.session_state.tl_start or _min_date,
+                        st.session_state.tl_end   or _max_date,
+                    ),
+                    min_value=_min_date,
+                    max_value=max(_max_date, _today),
+                )
+                if st.form_submit_button("Apply", use_container_width=True):
+                    if isinstance(_dr, (list, tuple)) and len(_dr) == 2:
+                        st.session_state.tl_start = _dr[0]
+                        st.session_state.tl_end   = _dr[1]
+                    elif isinstance(_dr, date):
+                        st.session_state.tl_start = _dr
+                        st.session_state.tl_end   = _dr
+                    st.rerun()
 
-        # ── Horizontal timeline strip ────────────────────────────────────────
-        st.markdown("#### Fire Activity Timeline")
-        _strip = daily_summary.tail(14)  # show last 14 dates with data
-        _strip_cols = st.columns(len(_strip))
-        for _ci, (_, _sr) in enumerate(_strip.iterrows()):
+        with _col_play:
+            st.markdown('<div class="sb-section" style="margin-top:0">Playback</div>', unsafe_allow_html=True)
+            _playing = st.session_state.tl_playing
+            _pc1, _pc2 = st.columns(2)
+            if _pc1.button("Play" if not _playing else "Pause",
+                           use_container_width=True, key="tl_play_btn"):
+                if not _playing:
+                    st.session_state.tl_play_date = _min_date
+                    st.session_state.tl_start     = _min_date
+                    st.session_state.tl_end       = _min_date
+                st.session_state.tl_playing = not _playing
+                st.rerun()
+            if _pc2.button("Stop", use_container_width=True, key="tl_stop_btn"):
+                st.session_state.tl_playing   = False
+                st.session_state.tl_play_date = None
+                st.rerun()
+
+            _speed = st.select_slider(
+                "Speed", options=[0.5, 1.0, 2.0],
+                value=st.session_state.tl_speed, key="tl_speed_slider",
+            )
+            st.session_state.tl_speed = _speed
+
+            if _playing and st.session_state.tl_play_date:
+                _pd = st.session_state.tl_play_date
+                st.markdown(
+                    f'<div class="tl-play-state">'
+                    f'Playing &nbsp;{_pd.strftime("%b %d, %Y")}'
+                    f'&nbsp; at {_speed}x'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+
+        st.markdown('<div style="height:16px"></div>', unsafe_allow_html=True)
+
+        # Activity strip
+        st.markdown('<div class="tl-section">Fire Activity by Date</div>', unsafe_allow_html=True)
+        _strip_data = daily_summary.tail(14)
+        _data_by_date = {r["acq_date"]: r for r in daily_summary.to_dict("records")}
+
+        _strip_html = '<div class="tl-strip-wrap">'
+        for _, _sr in _strip_data.iterrows():
+            _d       = date.fromisoformat(_sr["acq_date"])
+            _sev     = _sr["severity_label"]
+            _sel     = (st.session_state.tl_start and
+                        st.session_state.tl_start <= _d <= (st.session_state.tl_end or _d))
+            _sel_cls = " tl-selected" if _sel else ""
+            _cnt     = int(_sr["total_detections"])
+            _crit_ct = int(_sr["critical_events"])
+            _max_frp = float(_sr["max_frp"])
+            _title   = f"{_sev}: {_cnt} detections, {_crit_ct} critical, max FRP {_max_frp:.1f} MW"
+            _strip_html += (
+                f'<div class="tl-day-block tl-{_sev}{_sel_cls}" title="{_title}">'
+                f'<div class="tl-day-n">{_d.day}</div>'
+                f'<div class="tl-day-d">{_d.strftime("%b")}</div>'
+                f'<div class="tl-day-ct">{_cnt}</div>'
+                f'</div>'
+            )
+        _strip_html += '</div>'
+
+        # ponytail: can't make these clickable without JS; use Streamlit buttons below
+        st.markdown(_strip_html, unsafe_allow_html=True)
+
+        # Clickable day buttons (same data, Streamlit-native)
+        _strip_cols = st.columns(len(_strip_data))
+        for _ci, (_, _sr) in enumerate(_strip_data.iterrows()):
             _d   = date.fromisoformat(_sr["acq_date"])
             _sev = _sr["severity_label"]
-            _em  = _sr["emoji"]
-            _sel = (st.session_state.tl_start and
-                    st.session_state.tl_start <= _d <= (st.session_state.tl_end or _d))
-            _tip = (f"{_sev}: {_sr['total_detections']} detections, "
-                    f"{_sr['critical_events']} critical, "
-                    f"max FRP {_sr['max_frp']} MW")
+            _tip = (
+                f"{_sev}: {_sr['total_detections']} detections, "
+                f"{int(_sr['critical_events'])} critical, "
+                f"max FRP {_sr['max_frp']} MW"
+            )
             with _strip_cols[_ci]:
                 if st.button(
-                    f"{_em}\n{_d.strftime('%b %d')}",
+                    _d.strftime("%b %d"),
                     key=f"tl_strip_{_sr['acq_date']}",
                     use_container_width=True,
                     help=_tip,
@@ -614,340 +1158,486 @@ with tab_timeline:
                     st.session_state.tl_playing = False
                     st.rerun()
 
-        st.divider()
+        st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
 
-        # ── Calendar view ─────────────────────────────────────────────────────
-        st.markdown("#### Calendar View")
+        # Calendar
+        st.markdown('<div class="tl-section">Calendar View</div>', unsafe_allow_html=True)
         _cal_month = st.session_state.tl_start or _max_date
-        _data_by_date = {r["acq_date"]: r for r in daily_summary.to_dict("records")}
         _sel_s = st.session_state.tl_start
         _sel_e = st.session_state.tl_end
 
-        _sev_td_style: dict[str, str] = {}  # styles now handled by CSS classes
         _cal_html = (
-            f'<div style="font-family:var(--mono);max-width:460px">'
-            f'<div style="text-align:center;font-size:13px;font-weight:700;'
-            f'color:var(--text-0);margin-bottom:8px;font-family:var(--font)">'
-            f'{_cal_month.strftime("%B %Y")}</div>'
-            f'<table class="tl-cal">'
-            f'<tr>{"".join(f"<th>{d}</th>" for d in ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"])}</tr>'
+            f'<div style="font-family:var(--mono)">'
+            f'<div style="text-align:center;font-size:11px;font-weight:500;'
+            f'color:var(--t0);margin-bottom:10px;font-family:var(--font);'
+            f'letter-spacing:-0.01em">{_cal_month.strftime("%B %Y")}</div>'
+            f'<table class="tl-cal"><tr>'
+            f'{"".join(f"<th>{d}</th>" for d in ["Mo","Tu","We","Th","Fr","Sa","Su"])}'
+            f'</tr>'
         )
         for _week in _cal.monthcalendar(_cal_month.year, _cal_month.month):
             _cal_html += "<tr>"
             for _day in _week:
                 if _day == 0:
-                    _cal_html += '<td class="tl-none"></td>'
+                    _cal_html += '<td class="tl-cal-none"></td>'
                 else:
                     _d_str = f"{_cal_month.year}-{_cal_month.month:02d}-{_day:02d}"
-                    _rd = _data_by_date.get(_d_str)
+                    _rd    = _data_by_date.get(_d_str)
                     _d_obj = date.fromisoformat(_d_str)
-                    _is_sel = (_sel_s and _sel_e and _sel_s <= _d_obj <= _sel_e)
+                    _is_sel = (
+                        _sel_s and _sel_e and
+                        _sel_s <= _d_obj <= _sel_e
+                    )
+                    _sel_cls = " tl-cal-sel" if _is_sel else ""
                     if _rd:
-                        _sev = _rd["severity_label"]
-                        _em  = _rd["emoji"]
-                        _sel_cls = " tl-selected" if _is_sel else ""
+                        _sv = _rd["severity_label"]
                         _tip_txt = (
-                            f"{_d_str} | {_rd['total_detections']} detections | "
-                            f"{_rd['critical_events']} critical | "
-                            f"max FRP {_rd['max_frp']} MW | Risk: {_sev}"
+                            f"{_d_str} | {_rd['total_detections']} detections "
+                            f"| {_rd['critical_events']} critical "
+                            f"| max FRP {_rd['max_frp']} MW"
                         )
                         _cal_html += (
-                            f'<td class="tl-{_sev}{_sel_cls}" '
-                            f'title="{_tip_txt}">'
-                            f'{_em}<br>{_day}</td>'
+                            f'<td class="tl-{_sv}{_sel_cls}" title="{_tip_txt}">'
+                            f'{_day}</td>'
                         )
                     else:
-                        _sel_cls = " tl-selected" if _is_sel else ""
-                        _cal_html += f'<td class="tl-none{_sel_cls}">{_day}</td>'
+                        _cal_html += (
+                            f'<td class="tl-cal-none{_sel_cls}">{_day}</td>'
+                        )
             _cal_html += "</tr>"
         _cal_html += "</table></div>"
         st.markdown(_cal_html, unsafe_allow_html=True)
 
-        st.divider()
+        # Severity legend
+        st.markdown("""
+<div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:10px;font-size:9px;
+            font-weight:600;letter-spacing:0.1em;text-transform:uppercase">
+  <span style="color:var(--cr)">CRITICAL &ge;65</span>
+  <span style="color:var(--hi)">HIGH &ge;40</span>
+  <span style="color:var(--me)">MODERATE &ge;20</span>
+  <span style="color:var(--lo)">LOW &lt;20</span>
+  <span style="color:var(--t2)">risk score threshold</span>
+</div>
+""", unsafe_allow_html=True)
 
-        # ── Historical statistics for selected range ───────────────────────────
+        st.markdown('<div style="height:12px"></div>', unsafe_allow_html=True)
+
+        # Selected range statistics
         _tl_start_val = st.session_state.tl_start
         _tl_end_val   = st.session_state.tl_end
         if _tl_start_val and _tl_end_val:
             _range_events = get_events_for_range(_tl_start_val, _tl_end_val)
-            _range_str    = (
+            _range_str = (
                 _tl_start_val.strftime("%B %d, %Y") if _tl_start_val == _tl_end_val
                 else f"{_tl_start_val.strftime('%B %d')} – {_tl_end_val.strftime('%B %d, %Y')}"
             )
-            st.markdown(f"#### Statistics — {_range_str}")
+            st.markdown(
+                f'<div class="tl-section">Period Analysis &nbsp;·&nbsp; {_range_str}</div>',
+                unsafe_allow_html=True,
+            )
 
             if not _range_events:
-                st.info("No fire detections recorded for this date/range.")
+                st.markdown(
+                    '<div style="padding:20px 0;font-size:11px;color:var(--t2)">'
+                    'No fire detections recorded for this period.<br>'
+                    'Try selecting a date that has data in the calendar above.'
+                    '</div>',
+                    unsafe_allow_html=True,
+                )
             else:
-                _rev_df = pd.DataFrame(_range_events)
+                _rev_df     = pd.DataFrame(_range_events)
                 _n_total    = len(_rev_df)
-                _n_highconf = int((_rev_df["severity"].isin(["CRITICAL","HIGH"])).sum())
+                _n_highconf = int((_rev_df["severity"].isin(["CRITICAL", "HIGH"])).sum())
                 _n_critical = int((_rev_df["severity"] == "CRITICAL").sum())
                 _avg_frp    = _rev_df["frp_mw"].mean()
                 _max_frp    = _rev_df["frp_mw"].max()
-                _day_sev    = "CRITICAL" if _n_critical else ("HIGH" if _n_highconf else "MODERATE" if _n_total else "LOW")
+                _day_sev    = (
+                    "CRITICAL" if _n_critical
+                    else "HIGH" if _n_highconf
+                    else "MODERATE" if _n_total
+                    else "LOW"
+                )
 
-                # Critical banner
+                # Alert banner
                 if _n_critical > 0:
                     st.markdown(
-                        f'<div class="crit-notice">'
-                        f'<div class="crit-notice-hed">Critical Fire Activity — {_range_str}</div>'
-                        f'<div class="crit-notice-body">{_n_critical} critical events detected · {_n_highconf} high-confidence detections</div>'
-                        f'</div>',
+                        f'<div class="tl-alert-panel tl-alert-cr">'
+                        f'<div class="tl-alert-head">Critical fire activity — {_range_str}</div>'
+                        f'<div class="tl-alert-body">'
+                        f'{_n_critical} critical events &nbsp;·&nbsp; '
+                        f'{_n_highconf} high-confidence detections'
+                        f'</div></div>',
                         unsafe_allow_html=True,
                     )
                 elif _n_highconf > 0:
                     st.markdown(
-                        f'<div class="high-notice">'
-                        f'<div class="high-notice-hed">High Fire Activity — {_range_str}</div>'
-                        f'<div class="high-notice-body">{_n_highconf} high-confidence detections</div>'
+                        f'<div class="tl-alert-panel tl-alert-hi">'
+                        f'<div class="tl-alert-head">High fire activity — {_range_str}</div>'
+                        f'<div class="tl-alert-body">'
+                        f'{_n_highconf} high-confidence detections'
+                        f'</div></div>',
+                        unsafe_allow_html=True,
+                    )
+
+                # Stats grid
+                cr_v      = "tl-stat-val-cr" if _n_critical > 0 else ""
+                _avg_str  = f"{_avg_frp:.1f}" if _n_total else "—"
+                _max_str  = f"{_max_frp:.1f}" if _n_total else "—"
+                st.markdown(f"""
+<div class="tl-stats">
+  <div class="tl-stat">
+    <div class="tl-stat-label">Detections</div>
+    <div class="tl-stat-val">{_n_total:,}</div>
+  </div>
+  <div class="tl-stat">
+    <div class="tl-stat-label">High Confidence</div>
+    <div class="tl-stat-val">{_n_highconf:,}</div>
+  </div>
+  <div class="tl-stat">
+    <div class="tl-stat-label">Critical</div>
+    <div class="tl-stat-val {cr_v}">{_n_critical:,}</div>
+  </div>
+  <div class="tl-stat">
+    <div class="tl-stat-label">Avg FRP</div>
+    <div class="tl-stat-val">{_avg_str} <span style="font-size:11px;color:var(--t2)">MW</span></div>
+  </div>
+  <div class="tl-stat">
+    <div class="tl-stat-label">Max FRP</div>
+    <div class="tl-stat-val">{_max_str} <span style="font-size:11px;color:var(--t2)">MW</span></div>
+  </div>
+  <div class="tl-stat">
+    <div class="tl-stat-label">Risk Level</div>
+    <div class="tl-stat-val" style="font-size:13px;font-weight:500">{_day_sev}</div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+                if _n_total:
+                    _areas = _rev_df["land_cover_context"].value_counts().head(3)
+                    _area_str = " &nbsp;·&nbsp; ".join(
+                        f"{z} ({n})" for z, n in _areas.items()
+                    )
+                    st.markdown(
+                        f'<div style="font-size:9px;color:var(--t2);margin-top:4px">'
+                        f'Top affected land cover: {_area_str}'
                         f'</div>',
                         unsafe_allow_html=True,
                     )
 
-                _sc1, _sc2, _sc3, _sc4, _sc5, _sc6 = st.columns(6)
-                _sc1.metric("Total detections", f"{_n_total:,}")
-                _sc2.metric("High-confidence",  f"{_n_highconf:,}")
-                _sc3.metric("Critical events",   f"{_n_critical:,}")
-                _sc4.metric("Avg FRP (MW)",       f"{_avg_frp:.1f}" if _n_total else "—")
-                _sc5.metric("Max FRP (MW)",       f"{_max_frp:.1f}" if _n_total else "—")
-                _sc6.metric("Risk level", _day_sev)
 
-                if _n_total:
-                    _areas = _rev_df["land_cover_context"].value_counts().head(3)
-                    st.caption(
-                        "Top affected areas: "
-                        + " · ".join(f"**{z}** ({n})" for z, n in _areas.items())
-                    )
-
-        st.divider()
-
-        # ── Playback controls ─────────────────────────────────────────────────
-        st.markdown("#### Timeline Playback")
-        _playing = st.session_state.tl_playing
-        _pc1, _pc2, _pc3 = st.columns([1, 1, 2])
-        if _pc1.button("⏸ Pause" if _playing else "▶️ Play", use_container_width=True, key="tl_play_btn"):
-            if not _playing:
-                st.session_state.tl_play_date = _min_date
-                st.session_state.tl_start     = _min_date
-                st.session_state.tl_end       = _min_date
-            st.session_state.tl_playing = not _playing
-            st.rerun()
-        if _pc2.button("⏹ Stop", use_container_width=True, key="tl_stop_btn"):
-            st.session_state.tl_playing  = False
-            st.session_state.tl_play_date = None
-            st.rerun()
-        _speed = _pc3.select_slider(
-            "Playback speed", options=[0.5, 1.0, 2.0],
-            value=st.session_state.tl_speed, key="tl_speed_slider",
-        )
-        st.session_state.tl_speed = _speed
-
-        if _playing and st.session_state.tl_play_date:
-            _pd = st.session_state.tl_play_date
-            st.info(f"▶️ Playing: **{_pd.strftime('%B %d, %Y')}** at {_speed}× speed")
-
-        # Legend
-        _lc = st.columns(4)
-        _lc[0].markdown("🔴 **CRITICAL** ≥ 65 risk")
-        _lc[1].markdown("🟠 **HIGH** ≥ 40 risk")
-        _lc[2].markdown("🟡 **MODERATE** ≥ 20 risk")
-        _lc[3].markdown("🟢 **LOW** < 20 risk")
-
-
+# ────────────────────────────────────────────────────────────────────────────────
+# TAB 2 — GIS Export
+# ────────────────────────────────────────────────────────────────────────────────
 with tab_gis:
-    st.markdown("### GIS Export — PS Deliverable ii")
+    st.markdown('<div class="sec-label">GIS Export &nbsp;·&nbsp; PS Deliverable ii</div>', unsafe_allow_html=True)
     st.markdown(
-        "Download alerts as **GeoJSON** for use in QGIS, ArcGIS, or any GIS platform. "
-        "Each alert is a Point feature with full attribute table: output class, severity, "
-        "land-cover context, facility hazard type, FRP, persistence, and narrative."
+        '<div style="font-size:11px;color:var(--t1);margin-bottom:18px;line-height:1.7">'
+        'Download alerts as GeoJSON for use in QGIS, ArcGIS, or any GIS platform. '
+        'Each alert is a Point feature with full attribute table: output class, severity, '
+        'land-cover context, facility hazard type, FRP, persistence count, and narrative.'
+        '</div>',
+        unsafe_allow_html=True,
     )
-    all_alerts = alert_store.get_alerts(severity=sev_filter or None)
+
+    all_alerts  = alert_store.get_alerts(severity=sev_filter or None)
     geojson_str = _alerts_to_geojson(all_alerts)
 
-    col_dl1, col_dl2, col_dl3 = st.columns(3)
-    col_dl1.download_button(
-        "⬇️ Download GeoJSON (all alerts)",
+    _dl1, _dl2, _dl3 = st.columns(3)
+    _dl1.download_button(
+        "Download GeoJSON",
         data=geojson_str,
         file_name=f"sih26162_alerts_{datetime.now().strftime('%Y%m%d_%H%M')}.geojson",
         mime="application/geo+json",
         use_container_width=True,
     )
-
-    # CSV export
     if all_alerts:
         csv_df = pd.DataFrame(all_alerts)[[
-            "alert_id","lat","lon","output_class","severity","status","risk_score",
-            "land_cover_context","hazard_facility_type","frp_mw","persistence_count",
-            "dist_nearest_facility_km","nearest_city","acq_date","narrative",
+            "alert_id", "lat", "lon", "output_class", "severity", "status",
+            "risk_score", "land_cover_context", "hazard_facility_type",
+            "frp_mw", "persistence_count", "dist_nearest_facility_km",
+            "nearest_city", "acq_date", "narrative",
         ]]
-        col_dl2.download_button(
-            "⬇️ Download CSV",
+        _dl2.download_button(
+            "Download CSV",
             data=csv_df.to_csv(index=False),
             file_name=f"sih26162_alerts_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
             mime="text/csv",
             use_container_width=True,
         )
 
-    st.markdown("#### GeoJSON preview (first 3 features)")
+    st.markdown('<div class="sec-label" style="margin-top:20px">GeoJSON Preview &nbsp;·&nbsp; First 3 Features</div>', unsafe_allow_html=True)
     preview = json.loads(geojson_str)
     preview["features"] = preview["features"][:3]
     st.code(json.dumps(preview, indent=2), language="json")
 
+
+# ────────────────────────────────────────────────────────────────────────────────
+# TAB 3 — PS Classification
+# ────────────────────────────────────────────────────────────────────────────────
 with tab_ps:
-    st.markdown("### PS Deliverable i — Classification Output")
+    st.markdown('<div class="sec-label">PS Deliverable i &nbsp;·&nbsp; Classification Output</div>', unsafe_allow_html=True)
     st.markdown(
-        "The system classifies every NASA FIRMS thermal hotspot into one of three categories "
-        "aligned to the problem statement requirements:"
+        '<div style="font-size:11px;color:var(--t1);margin-bottom:18px;line-height:1.7">'
+        'Every NASA FIRMS thermal hotspot is classified into one of three output classes '
+        'aligned to the problem statement requirements.'
+        '</div>',
+        unsafe_allow_html=True,
     )
 
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        n = (scored_df["output_class"]==OUTPUT_CLASS_INDUSTRIAL_FIRE).sum() if not scored_df.empty else 0
-        st.error(f"🔴 **Industrial Fire / Abnormal Thermal Event**\n\n{n} detections")
-        st.markdown(
-            "Hotspots whose thermal signature matches **neither** the persistent-flare pattern "
-            "nor the natural-fire pattern. Candidates: accidental fires, gas leaks, explosions, "
-            "abnormal process heat.  \n\n"
-            "Facility types flagged: oil refineries, petrochemical complexes, chemical plants, "
-            "pharmaceutical units, mining areas."
-        )
-    with c2:
-        n = (scored_df["output_class"]==OUTPUT_CLASS_PERSISTENT_SOURCE).sum() if not scored_df.empty else 0
-        st.warning(f"🟠 **Persistent Industrial Thermal Source**\n\n{n} detections")
-        st.markdown(
-            "Continuous thermal emissions matching known industrial-heat signatures. "
-            "VNF gas-flare catalogue used as labeling oracle (1,500–2,000 K spectral temp). "
-            "Includes: thermal power plants, steel smelters, brick kilns, gas flaring stacks, "
-            "LNG terminals.  \n\n"
-            "Persistent re-detection across the 5-day NRT window is a key discriminator."
-        )
-    with c3:
-        n = (scored_df["output_class"]==OUTPUT_CLASS_NATURAL_FIRE).sum() if not scored_df.empty else 0
-        st.success(f"🟢 **Forest / Agricultural Fire**\n\n{n} detections")
-        st.markdown(
-            "Thermal events consistent with natural or crop-residue burning patterns. "
-            "Short-burst detections in forest/cropland land-cover zones, correlated with "
-            "agricultural burning seasons (Oct–Nov Punjab/Haryana; Jul–Sep Africa/Amazon). "
-            "Distinguished from industrial heat by low persistence and land-cover context."
-        )
+    n_ind = (scored_df["output_class"] == OUTPUT_CLASS_INDUSTRIAL_FIRE).sum() if not scored_df.empty else 0
+    n_per = (scored_df["output_class"] == OUTPUT_CLASS_PERSISTENT_SOURCE).sum() if not scored_df.empty else 0
+    n_nat = (scored_df["output_class"] == OUTPUT_CLASS_NATURAL_FIRE).sum() if not scored_df.empty else 0
 
-    st.divider()
-    st.markdown("#### Land-Cover Distribution (PS: 'integrates land-cover information')")
+    _pc1, _pc2, _pc3 = st.columns(3)
+    with _pc1:
+        st.markdown(f"""
+<div class="ps-class-panel ps-cr">
+  <div class="ps-class-head">Industrial Fire</div>
+  <div class="ps-class-count">{n_ind}</div>
+  <div class="ps-class-body">
+    Accidental fires, gas leaks, explosions, abnormal process heat.
+    Thermal signature matches neither the persistent-flare nor
+    natural-fire pattern.<br><br>
+    Facility types: oil refineries, petrochemical complexes,
+    chemical plants, pharmaceutical units, mining areas.
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+    with _pc2:
+        st.markdown(f"""
+<div class="ps-class-panel ps-hi">
+  <div class="ps-class-head">Persistent Source</div>
+  <div class="ps-class-count">{n_per}</div>
+  <div class="ps-class-body">
+    Continuous thermal emissions matching known industrial-heat
+    signatures. VNF gas-flare catalogue used as labeling oracle
+    (1,500–2,000 K spectral temp).<br><br>
+    Includes: thermal power plants, steel smelters, brick kilns,
+    gas flaring stacks, LNG terminals. Persistent re-detection
+    across the 5-day NRT window is the key discriminator.
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+    with _pc3:
+        st.markdown(f"""
+<div class="ps-class-panel ps-lo">
+  <div class="ps-class-head">Natural Fire</div>
+  <div class="ps-class-count">{n_nat}</div>
+  <div class="ps-class-body">
+    Thermal events consistent with natural or crop-residue burning.
+    Short-burst detections in forest/cropland land-cover zones,
+    correlated with agricultural burning seasons.<br><br>
+    Distinguished from industrial heat by low persistence and
+    land-cover context (cropland, forest — not industrial corridor).
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+    st.markdown('<div style="height:20px"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="sec-label">Land-Cover Distribution</div>', unsafe_allow_html=True)
     if not scored_df.empty:
-        lc_df = (scored_df.groupby(["land_cover_context","output_class"])
-                 .size().reset_index(name="count"))
-        st.dataframe(lc_df.sort_values("count", ascending=False),
-                     hide_index=True, use_container_width=True)
+        lc_df = (
+            scored_df.groupby(["land_cover_context", "output_class"])
+            .size().reset_index(name="count")
+        )
+        st.dataframe(
+            lc_df.sort_values("count", ascending=False),
+            hide_index=True, use_container_width=True,
+        )
 
-    st.divider()
-    st.markdown("#### Facility Hazard Type Distribution (PS: oil refineries, power plants, steel, mining, LNG)")
+    st.markdown('<div class="sec-label" style="margin-top:16px">Facility Hazard Type Distribution</div>', unsafe_allow_html=True)
     if not scored_df.empty:
-        ht_df = (scored_df.groupby(["hazard_facility_type","output_class"])
-                 .size().reset_index(name="count"))
-        st.dataframe(ht_df.sort_values("count", ascending=False),
-                     hide_index=True, use_container_width=True)
+        ht_df = (
+            scored_df.groupby(["hazard_facility_type", "output_class"])
+            .size().reset_index(name="count")
+        )
+        st.dataframe(
+            ht_df.sort_values("count", ascending=False),
+            hide_index=True, use_container_width=True,
+        )
 
+
+# ────────────────────────────────────────────────────────────────────────────────
+# TAB 4 — Confirmed Incidents
+# ────────────────────────────────────────────────────────────────────────────────
 with tab_inc:
-    st.markdown("### Confirmed India Industrial Incidents — Anomaly Scoring")
-    st.caption(
-        "30 curated major Indian industrial incidents (2019–2023) scored against the trained model. "
-        "**21/30 (70%) flagged as Industrial Fire / Abnormal Thermal Event** — correctly identified "
-        "as departing from both persistent-flare and natural-fire patterns."
+    st.markdown('<div class="sec-label">Confirmed India Industrial Incidents &nbsp;·&nbsp; Anomaly Scoring</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div style="font-size:11px;color:var(--t1);margin-bottom:18px;line-height:1.7">'
+        '30 curated major Indian industrial incidents (2019–2023) scored against the trained model. '
+        '21/30 (70%) flagged as Industrial Fire / Abnormal Thermal Event — correctly identified '
+        'as departing from both persistent-flare and natural-fire patterns.'
+        '</div>',
+        unsafe_allow_html=True,
     )
-    incidents = load_incidents()
-    if not incidents.empty:
-        disp = incidents[[
-            "incident_id","name","date","state","facility_type",
-            "predicted_label","prob_A","prob_B_candidate","anomaly_flag",
-            "dist_nearest_facility_km",
+
+    incidents_tab = load_incidents()
+    if not incidents_tab.empty:
+        disp = incidents_tab[[
+            "incident_id", "name", "date", "state", "facility_type",
+            "predicted_label", "prob_A", "prob_B_candidate",
+            "anomaly_flag", "dist_nearest_facility_km",
         ]].rename(columns={
-            "predicted_label":"model_class",
-            "prob_B_candidate":"prob_B",
-            "dist_nearest_facility_km":"dist_fac_km",
-            "anomaly_flag":"industrial_fire_flag",
+            "predicted_label":          "model_class",
+            "prob_B_candidate":         "prob_B",
+            "dist_nearest_facility_km": "dist_fac_km",
+            "anomaly_flag":             "industrial_fire_flag",
         })
-        st.dataframe(disp.sort_values("industrial_fire_flag", ascending=False),
-                     hide_index=True, use_container_width=True)
+        st.dataframe(
+            disp.sort_values("industrial_fire_flag", ascending=False),
+            hide_index=True, use_container_width=True,
+        )
 
-    st.markdown("#### Case Studies")
-    cs1, cs2, cs3 = st.columns(3)
-    with cs1:
-        st.error("🔴 Jharia Coalfield")
-        st.markdown("Underground coal seam fire active since 1916. **Flagged as Industrial Fire / Abnormal Event.** 4 repeat FIRMS detections. Near Mining/Extraction facility. Land cover: Mining/Industrial Corridor.")
-    with cs2:
-        st.success("🟢 Punjab Stubble Burning (Oct–Nov)")
-        st.markdown("Seasonal kharif-residue burning. **Correctly classified as Forest/Agricultural Fire.** Agri-season flag active. Land cover: Cropland — Kharif/Rabi (Punjab/Haryana).")
-    with cs3:
-        st.warning("🟠 Vizag LG Polymers Gas Leak")
-        st.markdown("Styrene gas leak, 2020, 12 fatalities. **Flagged as Industrial Fire.** Near Oil Refinery/Petrochemical facility (1.2 km). Anomaly score 0.52.")
+    st.markdown('<div class="sec-label" style="margin-top:16px">Case Studies</div>', unsafe_allow_html=True)
+    _cs1, _cs2, _cs3 = st.columns(3)
+    with _cs1:
+        st.markdown("""
+<div class="ps-class-panel ps-cr">
+  <div class="ps-class-head">Jharia Coalfield</div>
+  <div class="ps-class-body">
+    Underground coal seam fire active since 1916.
+    <b style="color:var(--cr)">Flagged as Industrial Fire.</b>
+    4 repeat FIRMS detections. Near Mining/Extraction facility.
+    Land cover: Mining/Industrial Corridor.
+  </div>
+</div>
+""", unsafe_allow_html=True)
+    with _cs2:
+        st.markdown("""
+<div class="ps-class-panel ps-lo">
+  <div class="ps-class-head">Punjab Stubble Burning</div>
+  <div class="ps-class-body">
+    Seasonal kharif-residue burning (Oct–Nov).
+    <b style="color:var(--lo)">Correctly classified as Natural Fire.</b>
+    Agri-season flag active. Land cover:
+    Cropland — Kharif/Rabi (Punjab/Haryana).
+  </div>
+</div>
+""", unsafe_allow_html=True)
+    with _cs3:
+        st.markdown("""
+<div class="ps-class-panel ps-hi">
+  <div class="ps-class-head">Vizag LG Polymers Gas Leak</div>
+  <div class="ps-class-body">
+    Styrene gas leak, 2020, 12 fatalities.
+    <b style="color:var(--hi)">Flagged as Industrial Fire.</b>
+    Near Oil Refinery/Petrochemical facility (1.2 km).
+    Anomaly score 0.52.
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
+
+# ────────────────────────────────────────────────────────────────────────────────
+# TAB 5 — Model
+# ────────────────────────────────────────────────────────────────────────────────
 with tab_model:
-    st.markdown("### AI Model — Architecture & Evaluation")
-    c1, c2 = st.columns(2)
-    with c1:
+    st.markdown('<div class="sec-label">AI Model &nbsp;·&nbsp; Architecture &amp; Evaluation</div>', unsafe_allow_html=True)
+
+    _mc1, _mc2 = st.columns(2)
+    with _mc1:
         st.markdown("""
-**Data sources integrated (PS requirement):**
-- 🛰️ **Satellite data:** NASA FIRMS VIIRS 375 m NRT (thermal anomaly data)
-- 🌿 **Land-cover:** Coordinate-based India zone classification + agri-season flag
-- 🏭 **Industrial databases:** WRI GPPD (34,936 power plants) + OSM industrial polygons (37,688 India features)
-- 🔥 **VNF gas flare catalogue:** ORNL DAAC 2012–2019 (83,641 gas flare sites, 1,500–2,000 K spectral temp)
+<div style="font-size:11px;color:var(--t1);line-height:1.8">
+<div style="font-size:9px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;
+            color:var(--t2);margin-bottom:10px">Data Sources (PS requirement)</div>
+<b style="color:var(--t0)">Satellite</b><br>
+NASA FIRMS VIIRS 375m NRT — thermal anomaly data<br><br>
+<b style="color:var(--t0)">Land-cover</b><br>
+Coordinate-based India zone classification + agri-season flag<br><br>
+<b style="color:var(--t0)">Industrial databases</b><br>
+WRI GPPD (34,936 power plants) + OSM industrial polygons (37,688 India features)<br><br>
+<b style="color:var(--t0)">Gas flare catalogue</b><br>
+ORNL DAAC VNF 2012–2019 (83,641 sites, 1,500–2,000 K spectral temp)<br><br>
+<div style="font-size:9px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;
+            color:var(--t2);margin:14px 0 8px">Facility Types Covered</div>
+Oil Refinery &nbsp;·&nbsp; Thermal Power Plant &nbsp;·&nbsp; Mining<br>
+Steel/Metal &nbsp;·&nbsp; Brick Kiln &nbsp;·&nbsp; LNG/Gas &nbsp;·&nbsp; Chemical/Pharma<br><br>
+<div style="font-size:9px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;
+            color:var(--t2);margin-bottom:8px">Labeling Approach</div>
+VNF used as spatial oracle — FIRMS within 5 km of a VNF site &rarr; Persistent Source.
+Remaining global FIRMS &rarr; Natural Fire candidate.
+Anomaly (max_prob &lt; 0.55) &rarr; Industrial Fire.
+</div>
+""", unsafe_allow_html=True)
 
-**Labeling approach:**
-VNF used as spatial labeling oracle — FIRMS detections within 5 km of a known VNF flare site → Persistent Source.
-Remaining global FIRMS → Natural Fire candidate.
-Anomaly (max_prob < 0.55) → Industrial Fire / Abnormal Event.
-
-**PS facility types covered:**
-Oil Refinery ✅ · Thermal Power Plant ✅ · Mining ✅ · Steel/Metal ✅ · Brick Kiln ✅ · LNG/Gas Terminal ✅ · Chemical/Pharma ✅
-""")
-    with c2:
+    with _mc2:
         st.markdown("""
-**Three-way evaluation (anti-leakage design):**
+<div style="font-size:11px;color:var(--t1);line-height:1.8">
+<div style="font-size:9px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;
+            color:var(--t2);margin-bottom:10px">Three-Way Evaluation (anti-leakage design)</div>
+</div>
+""", unsafe_allow_html=True)
+        _eval_df = pd.DataFrame({
+            "Evaluation":  ["Random split (baseline)", "Spatial holdout (honest)", "India holdout (locked)"],
+            "Accuracy":    ["97.25%", "98.06%", "scored only"],
+            "Class A F1":  ["0.24",   "0.18",   "—"],
+        })
+        st.dataframe(_eval_df, hide_index=True, use_container_width=True)
 
-| Evaluation | Accuracy | Class A F1 |
-|---|---|---|
-| Random split (inflated baseline) | 97.25% | 0.24 |
-| Spatial holdout (honest) | 98.06% | 0.18 |
-| India holdout (locked) | scored only | — |
+        st.markdown("""
+<div style="font-size:11px;color:var(--t1);line-height:1.8;margin-top:14px">
+<div style="font-size:9px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;
+            color:var(--t2);margin-bottom:10px">Feature Importances</div>
+</div>
+""", unsafe_allow_html=True)
+        _feat_df = pd.DataFrame({
+            "Feature":    [
+                "Distance to industrial facility",
+                "Nighttime detection flag",
+                "Pixel brightness temperature",
+                "Persistence count (5-day)",
+                "Fire Radiative Power (FRP)",
+            ],
+            "Importance": ["29.3%", "25.3%", "21.4%", "13.9%", "10.1%"],
+        })
+        st.dataframe(_feat_df, hide_index=True, use_container_width=True)
 
-**Training:** Global FIRMS NRT · India entirely withheld as test region · Spatial grid 80/20 split
 
-**Feature importances:**
-| Feature | Importance |
-|---|---|
-| Distance to industrial facility | 29.3% |
-| Nighttime detection flag | 25.3% |
-| Pixel brightness temperature | 21.4% |
-| Persistence count (5-day) | 13.9% |
-| Fire Radiative Power (FRP) | 10.1% |
-""")
-
+# ────────────────────────────────────────────────────────────────────────────────
+# TAB 6 — Limitations
+# ────────────────────────────────────────────────────────────────────────────────
 with tab_limits:
-    st.markdown("""
-### Limitations & Scientific Caveats
+    st.markdown('<div class="sec-label">Limitations &amp; Scientific Caveats</div>', unsafe_allow_html=True)
 
-**Classification:**
-- No confirmed industrial fire ground-truth dataset exists (India or global). The "Industrial Fire" output class is derived from the anomaly detection — hotspots matching neither the persistent-flare nor natural-fire patterns — not from direct supervised training on confirmed incidents.
-- Class A (Persistent Source) training set: 1,901 FIRMS examples via VNF oracle. F1 = 0.18 on spatial holdout. Historical FIRMS archive would improve recall substantially.
+    _lim_items = [
+        ("Classification",
+         "No confirmed industrial fire ground-truth dataset exists (India or global). "
+         "The Industrial Fire output class is derived from anomaly detection — hotspots "
+         "matching neither the persistent-flare nor natural-fire patterns — not from "
+         "direct supervised training on confirmed incidents. "
+         "Class A training set: 1,901 FIRMS examples via VNF oracle. F1 = 0.18 on spatial holdout. "
+         "Historical FIRMS archive would improve recall substantially."),
+        ("Land-cover",
+         "Land-cover context is derived from coordinate-based India zone rules + agri-season flag. "
+         "Full MODIS MCD12Q1 or ESA CCI Land Cover integration would improve precision, "
+         "particularly for forest vs agricultural vs mixed land-cover discrimination."),
+        ("Facility coverage",
+         "LNG terminals are present in the facility layer via OSM port tags but are a small fraction. "
+         "Dedicated LNG infrastructure datasets (e.g., Global LNG Tracker) would improve coverage. "
+         "Steel mills and petrochemical complexes are mapped via generic landuse=industrial "
+         "OSM tag where specific sub-tags are absent."),
+        ("Temporal",
+         "FIRMS NRT covers only the last 5 days. Historical incident matching (2019–2023 events) "
+         "requires LAADS DAAC archive download. "
+         "VNF persistence data is annual (2012–2019); NRT persistence counts are 5-day only."),
+        ("Operational use",
+         "All alerts require human verification before operational dispatch. "
+         "Correct framing: anomalous departure from known persistent-industrial and "
+         "natural-fire patterns — not confirmed fire detection."),
+    ]
+    for _title, _body in _lim_items:
+        st.markdown(f"""
+<div style="padding:12px 0;border-bottom:1px solid var(--bd-0)">
+  <div style="font-size:9px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;
+              color:var(--t2);margin-bottom:5px">{_title}</div>
+  <div style="font-size:11px;color:var(--t1);line-height:1.75">{_body}</div>
+</div>
+""", unsafe_allow_html=True)
 
-**Land-cover:**
-- Land-cover context is derived from coordinate-based India zone rules + agri-season flag. Full MODIS MCD12Q1 or ESA CCI Land Cover integration would improve precision, particularly for forest vs agricultural vs mixed land-cover discrimination.
 
-**Facility coverage:**
-- LNG terminals are present in the facility layer via OSM `port` tags but are a small fraction. Dedicated LNG infrastructure datasets (e.g., Global LNG Tracker) would improve coverage.
-- Steel mills and petrochemical complexes are mapped via generic `landuse=industrial` OSM tag where specific sub-tags are absent.
-
-**Temporal:**
-- FIRMS NRT covers only the last 5 days. Historical incident matching (2019–2023 events) requires LAADS DAAC archive download.
-- VNF persistence data is annual (2012–2019); NRT persistence counts are 5-day only.
-
-**General:**
-- All alerts require human verification before operational dispatch.
-- Correct framing: *"anomalous departure from known persistent-industrial and natural-fire patterns"* — not confirmed fire detection.
-""")
-
-# ── Timeline playback: advance one day per rerun ──────────────────────────────
+# ── Timeline playback — advance one day per rerun ─────────────────────────────
 if st.session_state.tl_playing and st.session_state.tl_play_date and not daily_summary.empty:
     _play_d    = st.session_state.tl_play_date
     _play_next = _play_d + timedelta(days=1)
