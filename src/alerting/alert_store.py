@@ -153,6 +153,8 @@ def insert_alerts(rows: list[dict]) -> int:
 def get_alerts(
     severity: list[str] | None = None,
     status: list[str] | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
     limit: int = 500,
 ) -> list[dict]:
     """Fetch alerts, optionally filtered. Returns list of dicts sorted by severity then time."""
@@ -166,6 +168,12 @@ def get_alerts(
         placeholders = ",".join("?" * len(status))
         clauses.append(f"status IN ({placeholders})")
         params.extend(status)
+    if date_from:
+        clauses.append("acq_date >= ?")
+        params.append(date_from)
+    if date_to:
+        clauses.append("acq_date <= ?")
+        params.append(date_to)
 
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     rows = con.execute(
