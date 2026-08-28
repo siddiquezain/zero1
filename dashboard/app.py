@@ -248,18 +248,18 @@ label[data-testid="stWidgetLabel"] {
 }
 .sys-bar-left {}
 .sys-bar-id {
-  font-family: var(--mono); font-size: 8px; font-weight: 500;
-  letter-spacing: 0.22em; text-transform: uppercase; color: var(--t2);
+  font-family: var(--mono); font-size: 11px; font-weight: 500;
+  letter-spacing: 0.10em; text-transform: uppercase; color: var(--t1);
   margin-bottom: 5px;
 }
 .sys-bar-title {
-  font-size: 15px; font-weight: 600; letter-spacing: -0.02em;
-  color: var(--t0); margin-bottom: 3px;
+  font-size: 20px; font-weight: 600; letter-spacing: -0.02em;
+  color: var(--t0); margin-bottom: 4px;
 }
-.sys-bar-sub { font-size: 10px; color: var(--t2); }
+.sys-bar-sub { font-size: 12px; color: var(--t1); }
 .sys-bar-live {
   display: flex; align-items: center; gap: 7px;
-  font-family: var(--mono); font-size: 9px; color: var(--t2);
+  font-family: var(--mono); font-size: 11px; color: var(--t1);
   margin-top: 4px;
 }
 .live-dot {
@@ -280,17 +280,17 @@ label[data-testid="stWidgetLabel"] {
 .ss-item:first-child { padding-left: 0; }
 .ss-item:last-child  { border-right: none; }
 .ss-label {
-  font-size: 8px; font-weight: 600; letter-spacing: 0.16em;
-  text-transform: uppercase; color: var(--t2); margin-bottom: 6px;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.10em;
+  text-transform: uppercase; color: var(--t1); margin-bottom: 6px;
 }
 .ss-val {
-  font-family: var(--mono); font-size: 20px; font-weight: 400;
+  font-family: var(--mono); font-size: 22px; font-weight: 400;
   letter-spacing: -0.03em; color: var(--t0); line-height: 1;
 }
 .ss-val-cr { color: var(--cr); }
 .ss-val-hi { color: var(--hi); }
 .ss-sub {
-  font-size: 9px; color: var(--t2); margin-top: 3px;
+  font-size: 10px; color: var(--t1); margin-top: 3px;
   font-family: var(--mono);
 }
 
@@ -301,10 +301,10 @@ label[data-testid="stWidgetLabel"] {
   margin-bottom: 14px;
 }
 .feed-title {
-  font-size: 8px; font-weight: 600; letter-spacing: 0.18em;
-  text-transform: uppercase; color: var(--t2);
+  font-size: 10px; font-weight: 600; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--t1);
 }
-.feed-meta { font-family: var(--mono); font-size: 9px; color: var(--t2); }
+.feed-meta { font-family: var(--mono); font-size: 10px; color: var(--t1); }
 
 .sev-head {
   font-size: 8px; font-weight: 600; letter-spacing: 0.18em;
@@ -381,14 +381,14 @@ label[data-testid="stWidgetLabel"] {
   margin-bottom: 10px;
 }
 .map-title {
-  font-size: 8px; font-weight: 600; letter-spacing: 0.18em;
-  text-transform: uppercase; color: var(--t2);
+  font-size: 10px; font-weight: 600; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--t1);
 }
 .map-mode {
-  font-size: 10px; font-weight: 500; color: var(--t0);
+  font-size: 12px; font-weight: 500; color: var(--t0);
   margin-top: 3px;
 }
-.map-ts { font-family: var(--mono); font-size: 9px; color: var(--t2); }
+.map-ts { font-family: var(--mono); font-size: 10px; color: var(--t1); }
 .map-legend {
   display: flex; gap: 20px; flex-wrap: wrap;
   padding-top: 10px; border-top: 1px solid var(--bd-0);
@@ -501,8 +501,8 @@ label[data-testid="stWidgetLabel"] {
 
 /* === SECTION LABEL === */
 .sec-label {
-  font-size: 8px; font-weight: 600; letter-spacing: 0.18em;
-  text-transform: uppercase; color: var(--t2);
+  font-size: 10px; font-weight: 600; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--t1);
   padding-bottom: 10px; border-bottom: 1px solid var(--bd-1);
   margin-bottom: 14px;
 }
@@ -728,6 +728,12 @@ def _build_map(scored: pd.DataFrame, incidents: pd.DataFrame,
     )
 
 
+# ── Pre-load timeline data (needed in sidebar date controls) ──────────────────
+daily_summary = get_daily_summary()
+_sb_dates_iso = daily_summary["acq_date"].tolist() if not daily_summary.empty else []
+_sb_min_date  = date.fromisoformat(_sb_dates_iso[0])  if _sb_dates_iso else date.today()
+_sb_max_date  = date.fromisoformat(_sb_dates_iso[-1]) if _sb_dates_iso else date.today()
+
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("""
@@ -766,6 +772,58 @@ with st.sidebar:
             label_visibility="collapsed",
         )
 
+        # ── Date Filter (in sidebar so it doesn't require scrolling) ──────────
+        if not daily_summary.empty:
+            st.markdown('<div class="sb-section">Date Filter</div>', unsafe_allow_html=True)
+            _qb1, _qb2 = st.columns(2)
+            _qb3, _qb4 = st.columns(2)
+            if _qb1.button("Today",   key="sb_q0", use_container_width=True):
+                st.session_state.tl_start = date.today()
+                st.session_state.tl_end   = date.today(); st.rerun()
+            if _qb2.button("Last 24h",key="sb_q1", use_container_width=True):
+                st.session_state.tl_start = date.today() - timedelta(days=1)
+                st.session_state.tl_end   = date.today(); st.rerun()
+            if _qb3.button("7 days",  key="sb_q2", use_container_width=True):
+                st.session_state.tl_start = date.today() - timedelta(days=7)
+                st.session_state.tl_end   = date.today(); st.rerun()
+            if _qb4.button("Clear",   key="sb_q4", use_container_width=True,
+                            disabled=st.session_state.tl_start is None):
+                st.session_state.tl_start   = None
+                st.session_state.tl_end     = None
+                st.session_state.tl_playing = False; st.rerun()
+            with st.form("sb_date_form"):
+                _sb_dr = st.date_input(
+                    "Range",
+                    value=(
+                        st.session_state.tl_start or _sb_min_date,
+                        st.session_state.tl_end   or _sb_max_date,
+                    ),
+                    min_value=_sb_min_date,
+                    max_value=max(_sb_max_date, date.today()),
+                    label_visibility="collapsed",
+                )
+                if st.form_submit_button("Apply", use_container_width=True):
+                    if isinstance(_sb_dr, (list, tuple)) and len(_sb_dr) == 2:
+                        st.session_state.tl_start = _sb_dr[0]
+                        st.session_state.tl_end   = _sb_dr[1]
+                    elif isinstance(_sb_dr, date):
+                        st.session_state.tl_start = _sb_dr
+                        st.session_state.tl_end   = _sb_dr
+                    st.rerun()
+            # Show active filter badge
+            if st.session_state.tl_start:
+                _active_rng = (
+                    st.session_state.tl_start.strftime("%b %d")
+                    if st.session_state.tl_start == st.session_state.tl_end
+                    else f"{st.session_state.tl_start.strftime('%b %d')} – "
+                         f"{st.session_state.tl_end.strftime('%b %d')}"
+                )
+                st.markdown(
+                    f'<div style="font-size:10px;color:var(--sys);font-family:var(--mono);'
+                    f'padding:4px 0;letter-spacing:0.06em">Filter: {_active_rng}</div>',
+                    unsafe_allow_html=True,
+                )
+
         st.markdown('<div class="sb-section">Pipeline</div>', unsafe_allow_html=True)
         if st.button("Re-run detection pipeline", use_container_width=True):
             with st.spinner("Running pipeline…"):
@@ -790,10 +848,10 @@ with st.sidebar:
 
 
 # ── Data ───────────────────────────────────────────────────────────────────────
-scored_df    = load_scored()
-daily_summary = get_daily_summary()
-c            = alert_store.counts()
-now_str      = datetime.now(timezone.utc).strftime("%H:%M UTC")
+scored_df = load_scored()
+# daily_summary already loaded above (before sidebar)
+c         = alert_store.counts()
+now_str   = datetime.now(timezone.utc).strftime("%H:%M UTC")
 
 
 # ── System bar ─────────────────────────────────────────────────────────────────
@@ -908,7 +966,7 @@ with col_alert:
 </div>
 """, unsafe_allow_html=True)
 
-    with st.container(height=590, border=False):
+    with st.container(height=420, border=False):
         if not alerts:
             st.markdown(
                 '<div style="padding:24px 0;font-size:11px;color:var(--t2);text-align:center">'
@@ -978,10 +1036,13 @@ with col_map:
 """, unsafe_allow_html=True)
 
     incidents_df = load_incidents()
+    # Hide confirmed incident markers when a date filter is active — they are
+    # 2019-2023 historical events that don't correspond to the filtered FIRMS dates.
+    _show_inc_now = show_incidents and not _tl_s
     st.pydeck_chart(
-        _build_map(map_df, incidents_df, show_incidents, colour_by),
+        _build_map(map_df, incidents_df, _show_inc_now, colour_by),
         use_container_width=True,
-        height=540,
+        height=460,
     )
 
     st.markdown("""
@@ -1027,86 +1088,44 @@ with tab_tl:
         _min_date  = date.fromisoformat(_dates_iso[0])
         _max_date  = date.fromisoformat(_dates_iso[-1])
 
-        # Top row: date selector + playback
-        _col_picker, _col_play = st.columns([1.6, 1], gap="medium")
+        # Playback controls (date filter is in the sidebar)
+        st.markdown(
+            '<div style="font-size:10px;color:var(--t1);margin-bottom:10px">'
+            'Use the <b style="color:var(--t0)">Date Filter</b> in the sidebar '
+            'to filter the map and alerts by date range.</div>',
+            unsafe_allow_html=True,
+        )
+        _playing = st.session_state.tl_playing
+        _pc1, _pc2, _pc3 = st.columns([1, 1, 2])
+        if _pc1.button("Play" if not _playing else "Pause",
+                       use_container_width=True, key="tl_play_btn"):
+            if not _playing:
+                st.session_state.tl_play_date = _min_date
+                st.session_state.tl_start     = _min_date
+                st.session_state.tl_end       = _min_date
+            st.session_state.tl_playing = not _playing
+            st.rerun()
+        if _pc2.button("Stop", use_container_width=True, key="tl_stop_btn"):
+            st.session_state.tl_playing   = False
+            st.session_state.tl_play_date = None
+            st.rerun()
+        _speed = _pc3.select_slider(
+            "Speed", options=[0.5, 1.0, 2.0],
+            value=st.session_state.tl_speed, key="tl_speed_slider",
+        )
+        st.session_state.tl_speed = _speed
 
-        with _col_picker:
-            # Quick jump buttons
-            _jc = st.columns(5)
-            _qj_labels = ["Today", "Last 24h", "7 days", "30 days", "Clear"]
-            _qj_keys   = ["tl_q0", "tl_q1", "tl_q2", "tl_q3", "tl_q4"]
-            if _jc[0].button("Today",    key=_qj_keys[0], use_container_width=True):
-                st.session_state.tl_start = _today
-                st.session_state.tl_end   = _today; st.rerun()
-            if _jc[1].button("Last 24h", key=_qj_keys[1], use_container_width=True):
-                st.session_state.tl_start = _today - timedelta(days=1)
-                st.session_state.tl_end   = _today; st.rerun()
-            if _jc[2].button("7 days",   key=_qj_keys[2], use_container_width=True):
-                st.session_state.tl_start = _today - timedelta(days=7)
-                st.session_state.tl_end   = _today; st.rerun()
-            if _jc[3].button("30 days",  key=_qj_keys[3], use_container_width=True):
-                st.session_state.tl_start = _today - timedelta(days=30)
-                st.session_state.tl_end   = _today; st.rerun()
-            if _jc[4].button("Clear",    key=_qj_keys[4], use_container_width=True,
-                              disabled=st.session_state.tl_start is None):
-                st.session_state.tl_start   = None
-                st.session_state.tl_end     = None
-                st.session_state.tl_playing = False
-                st.rerun()
-
-            with st.form("tl_date_form"):
-                _dr = st.date_input(
-                    "Date range",
-                    value=(
-                        st.session_state.tl_start or _min_date,
-                        st.session_state.tl_end   or _max_date,
-                    ),
-                    min_value=_min_date,
-                    max_value=max(_max_date, _today),
-                )
-                if st.form_submit_button("Apply", use_container_width=True):
-                    if isinstance(_dr, (list, tuple)) and len(_dr) == 2:
-                        st.session_state.tl_start = _dr[0]
-                        st.session_state.tl_end   = _dr[1]
-                    elif isinstance(_dr, date):
-                        st.session_state.tl_start = _dr
-                        st.session_state.tl_end   = _dr
-                    st.rerun()
-
-        with _col_play:
-            st.markdown('<div class="sb-section" style="margin-top:0">Playback</div>', unsafe_allow_html=True)
-            _playing = st.session_state.tl_playing
-            _pc1, _pc2 = st.columns(2)
-            if _pc1.button("Play" if not _playing else "Pause",
-                           use_container_width=True, key="tl_play_btn"):
-                if not _playing:
-                    st.session_state.tl_play_date = _min_date
-                    st.session_state.tl_start     = _min_date
-                    st.session_state.tl_end       = _min_date
-                st.session_state.tl_playing = not _playing
-                st.rerun()
-            if _pc2.button("Stop", use_container_width=True, key="tl_stop_btn"):
-                st.session_state.tl_playing   = False
-                st.session_state.tl_play_date = None
-                st.rerun()
-
-            _speed = st.select_slider(
-                "Speed", options=[0.5, 1.0, 2.0],
-                value=st.session_state.tl_speed, key="tl_speed_slider",
+        if _playing and st.session_state.tl_play_date:
+            _pd = st.session_state.tl_play_date
+            st.markdown(
+                f'<div class="tl-play-state">'
+                f'Playing &nbsp;{_pd.strftime("%b %d, %Y")}'
+                f'&nbsp; at {_speed}x'
+                f'</div>',
+                unsafe_allow_html=True,
             )
-            st.session_state.tl_speed = _speed
 
-            if _playing and st.session_state.tl_play_date:
-                _pd = st.session_state.tl_play_date
-                st.markdown(
-                    f'<div class="tl-play-state">'
-                    f'Playing &nbsp;{_pd.strftime("%b %d, %Y")}'
-                    f'&nbsp; at {_speed}x'
-                    f'</div>',
-                    unsafe_allow_html=True,
-                )
-
-        st.markdown('<div style="height:16px"></div>', unsafe_allow_html=True)
+        st.markdown('<div style="height:10px"></div>', unsafe_allow_html=True)
 
         # Activity strip
         st.markdown('<div class="tl-section">Fire Activity by Date</div>', unsafe_allow_html=True)
