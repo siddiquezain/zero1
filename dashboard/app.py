@@ -336,9 +336,11 @@ with col_alert:
     alerts = alert_store.get_alerts(
         severity=sev_filter or None,
         status=status_filter or None,
-        date_from=_tl_s.isoformat() if _tl_s else None,
-        date_to=_tl_e.isoformat() if _tl_e else None,
     )
+    # Apply date filter in Python — avoids any signature-change risk on cloud
+    if _tl_s and _tl_e:
+        _s_iso, _e_iso = _tl_s.isoformat(), _tl_e.isoformat()
+        alerts = [a for a in alerts if _s_iso <= a.get("acq_date", "") <= _e_iso]
     _feed_label = f"### Alert Feed — {len(alerts)} alerts"
     if _tl_s:
         _range_str = (_tl_s.strftime("%b %d") if _tl_s == _tl_e
