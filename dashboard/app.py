@@ -66,7 +66,9 @@ st.set_page_config(
 
 # ── Timeline session state ─────────────────────────────────────────────────────
 for _k, _v in [("tl_start", None), ("tl_end", None),
-                ("tl_playing", False), ("tl_play_date", None), ("tl_speed", 1.0)]:
+                ("tl_playing", False), ("tl_play_date", None), ("tl_speed", 1.0),
+                ("alert_page", 0), ("show_incidents", True),
+                ("colour_by", "Output Class (PS classification)")]:
     if _k not in st.session_state:
         st.session_state[_k] = _v
 
@@ -128,49 +130,35 @@ html, body, [data-testid="stAppViewContainer"] {
 #MainMenu, footer,
 [data-testid="stToolbar"],
 [data-testid="stDecoration"],
-[data-testid="stHeader"] { display: none !important; }
+[data-testid="stHeader"],
+[data-testid="collapsedControl"],
+[data-testid="stSidebarNav"] { display: none !important; }
 
 /* === SCROLLBAR === */
 ::-webkit-scrollbar { width: 3px; height: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--bd-2); border-radius: 1px; }
 
-/* === SIDEBAR === */
-[data-testid="stSidebar"] {
-  background: var(--bg-1) !important;
-  border-right: 1px solid var(--bd-1) !important;
+/* === CONTROL BAR === */
+.ctrl-bar {
+  display: flex; align-items: center; gap: 0;
+  padding: 10px 0 12px; border-bottom: 1px solid var(--bd-1);
+  margin-bottom: 20px;
 }
-[data-testid="stSidebar"] > div:first-child { padding: 0 !important; }
-[data-testid="stSidebar"] * { font-family: var(--font) !important; }
-[data-testid="stSidebar"] .block-container { padding: 0 !important; }
-section[data-testid="stSidebar"] > div { padding-top: 0 !important; }
-
-/* === SIDEBAR INNER === */
-.sb-inner { padding: 20px 16px; }
-.sb-product { padding-bottom: 16px; border-bottom: 1px solid var(--bd-1); margin-bottom: 16px; }
-.sb-product-id {
-  font-family: var(--mono); font-size: 8px; font-weight: 500;
-  letter-spacing: 0.22em; text-transform: uppercase; color: var(--t2);
-  margin-bottom: 6px;
+.ctrl-label {
+  font-size: 8px; font-weight: 600; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--t2); margin-bottom: 5px;
 }
-.sb-product-name {
-  font-size: 13px; font-weight: 600; color: var(--t0); margin-bottom: 2px;
-  letter-spacing: -0.01em;
+.ctrl-sep {
+  width: 1px; background: var(--bd-1); align-self: stretch; margin: 0 16px;
+  flex-shrink: 0;
 }
-.sb-product-sub { font-size: 10px; color: var(--t2); }
-
-.sb-section {
-  font-size: 8px; font-weight: 600; letter-spacing: 0.18em;
-  text-transform: uppercase; color: var(--t2);
-  margin: 16px 0 8px; padding-bottom: 6px;
-  border-bottom: 1px solid var(--bd-0);
+.ctrl-date-badge {
+  font-size: 9px; font-family: var(--mono); color: var(--sys);
+  letter-spacing: 0.06em; margin-top: 4px;
 }
-
-.sb-data {
-  padding: 14px 16px; margin-top: 8px; border-top: 1px solid var(--bd-1);
-  font-size: 9px; color: var(--t2); line-height: 1.8;
-  font-family: var(--mono);
-}
+/* Streamlit sidebar hidden — all controls are in top bar */
+[data-testid="stSidebar"] { display: none !important; }
 
 /* === BUTTONS === */
 .stButton > button {
@@ -728,129 +716,13 @@ def _build_map(scored: pd.DataFrame, incidents: pd.DataFrame,
     )
 
 
-# ── Pre-load timeline data (needed in sidebar date controls) ──────────────────
+# ── Data ───────────────────────────────────────────────────────────────────────
+scored_df     = load_scored()
 daily_summary = get_daily_summary()
 _sb_dates_iso = daily_summary["acq_date"].tolist() if not daily_summary.empty else []
 _sb_min_date  = date.fromisoformat(_sb_dates_iso[0])  if _sb_dates_iso else date.today()
 _sb_max_date  = date.fromisoformat(_sb_dates_iso[-1]) if _sb_dates_iso else date.today()
-
-# ── Sidebar ────────────────────────────────────────────────────────────────────
-with st.sidebar:
-    st.markdown("""
-<div class="sb-inner">
-  <div class="sb-product">
-    <div class="sb-product-id">SIH · 26162</div>
-    <div class="sb-product-name">Fire Intelligence</div>
-    <div class="sb-product-sub">AI Thermal Anomaly Detection</div>
-  </div>
-</div>
-""", unsafe_allow_html=True)
-
-    with st.container():
-        st.markdown('<div style="padding:0 16px">', unsafe_allow_html=True)
-
-        st.markdown('<div class="sb-section">Severity Filter</div>', unsafe_allow_html=True)
-        sev_filter = st.multiselect(
-            "Severity", ["CRITICAL", "HIGH", "MEDIUM", "LOW"],
-            default=["CRITICAL", "HIGH", "MEDIUM", "LOW"],
-            label_visibility="collapsed",
-        )
-
-        st.markdown('<div class="sb-section">Status Filter</div>', unsafe_allow_html=True)
-        status_filter = st.multiselect(
-            "Status", alert_store.LIFECYCLE_STATES,
-            default=["DETECTED", "VALIDATING", "ALERTED", "ESCALATED", "MONITORING"],
-            label_visibility="collapsed",
-        )
-
-        st.markdown('<div class="sb-section">Map Options</div>', unsafe_allow_html=True)
-        show_incidents = st.checkbox("Confirmed incident sites", value=True)
-        colour_by = st.radio(
-            "Colour by",
-            ["Output Class (PS classification)", "Alert Severity"],
-            index=0,
-            label_visibility="collapsed",
-        )
-
-        # ── Date Filter (in sidebar so it doesn't require scrolling) ──────────
-        if not daily_summary.empty:
-            st.markdown('<div class="sb-section">Date Filter</div>', unsafe_allow_html=True)
-            _qb1, _qb2 = st.columns(2)
-            _qb3, _qb4 = st.columns(2)
-            if _qb1.button("Today",   key="sb_q0", use_container_width=True):
-                st.session_state.tl_start = date.today()
-                st.session_state.tl_end   = date.today(); st.rerun()
-            if _qb2.button("Last 24h",key="sb_q1", use_container_width=True):
-                st.session_state.tl_start = date.today() - timedelta(days=1)
-                st.session_state.tl_end   = date.today(); st.rerun()
-            if _qb3.button("7 days",  key="sb_q2", use_container_width=True):
-                st.session_state.tl_start = date.today() - timedelta(days=7)
-                st.session_state.tl_end   = date.today(); st.rerun()
-            if _qb4.button("Clear",   key="sb_q4", use_container_width=True,
-                            disabled=st.session_state.tl_start is None):
-                st.session_state.tl_start   = None
-                st.session_state.tl_end     = None
-                st.session_state.tl_playing = False; st.rerun()
-            with st.form("sb_date_form"):
-                _sb_dr = st.date_input(
-                    "Range",
-                    value=(
-                        st.session_state.tl_start or _sb_min_date,
-                        st.session_state.tl_end   or _sb_max_date,
-                    ),
-                    min_value=_sb_min_date,
-                    max_value=max(_sb_max_date, date.today()),
-                    label_visibility="collapsed",
-                )
-                if st.form_submit_button("Apply", use_container_width=True):
-                    if isinstance(_sb_dr, (list, tuple)) and len(_sb_dr) == 2:
-                        st.session_state.tl_start = _sb_dr[0]
-                        st.session_state.tl_end   = _sb_dr[1]
-                    elif isinstance(_sb_dr, date):
-                        st.session_state.tl_start = _sb_dr
-                        st.session_state.tl_end   = _sb_dr
-                    st.rerun()
-            # Show active filter badge
-            if st.session_state.tl_start:
-                _active_rng = (
-                    st.session_state.tl_start.strftime("%b %d")
-                    if st.session_state.tl_start == st.session_state.tl_end
-                    else f"{st.session_state.tl_start.strftime('%b %d')} – "
-                         f"{st.session_state.tl_end.strftime('%b %d')}"
-                )
-                st.markdown(
-                    f'<div style="font-size:10px;color:var(--sys);font-family:var(--mono);'
-                    f'padding:4px 0;letter-spacing:0.06em">Filter: {_active_rng}</div>',
-                    unsafe_allow_html=True,
-                )
-
-        st.markdown('<div class="sb-section">Pipeline</div>', unsafe_allow_html=True)
-        if st.button("Re-run detection pipeline", use_container_width=True):
-            with st.spinner("Running pipeline…"):
-                r = run_pipeline(fresh=True)
-                load_scored.clear()
-                load_incidents.clear()
-            st.success(
-                f"Done — CRITICAL: {r['counts']['CRITICAL']}  HIGH: {r['counts']['HIGH']}"
-            )
-            st.rerun()
-
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    st.markdown("""
-<div class="sb-data">
-  NASA FIRMS VIIRS 375m · VNF Gas Flare Catalogue<br>
-  WRI GPPD · OpenStreetMap Industrial · OSM India<br>
-  Model: RandomForest · India holdout withheld<br>
-  Framing: anomalous departure from known patterns
-</div>
-""", unsafe_allow_html=True)
-
-
-# ── Data ───────────────────────────────────────────────────────────────────────
-scored_df = load_scored()
-# daily_summary already loaded above (before sidebar)
-c         = alert_store.counts()
+c             = alert_store.counts()
 now_str   = datetime.now(timezone.utc).strftime("%H:%M UTC")
 
 
@@ -923,6 +795,93 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 
+# ── Top control bar ────────────────────────────────────────────────────────────
+_cb1, _cb2, _cb3, _cb4, _cb5 = st.columns([2, 2.2, 2.4, 1.6, 1.2], gap="medium")
+
+with _cb1:
+    st.markdown('<div class="ctrl-label">Severity</div>', unsafe_allow_html=True)
+    sev_filter = st.multiselect(
+        "Severity", ["CRITICAL", "HIGH", "MEDIUM", "LOW"],
+        default=["CRITICAL", "HIGH", "MEDIUM", "LOW"],
+        label_visibility="collapsed", key="ctrl_sev",
+    )
+
+with _cb2:
+    st.markdown('<div class="ctrl-label">Status</div>', unsafe_allow_html=True)
+    status_filter = st.multiselect(
+        "Status", alert_store.LIFECYCLE_STATES,
+        default=["DETECTED", "VALIDATING", "ALERTED", "ESCALATED", "MONITORING"],
+        label_visibility="collapsed", key="ctrl_sts",
+    )
+
+with _cb3:
+    st.markdown('<div class="ctrl-label">Date Filter</div>', unsafe_allow_html=True)
+    _db1, _db2, _db3, _db4 = st.columns(4)
+    if _db1.button("Today",  key="cb_q0", use_container_width=True):
+        st.session_state.tl_start = date.today(); st.session_state.tl_end = date.today()
+        st.session_state.alert_page = 0; st.rerun()
+    if _db2.button("24h",    key="cb_q1", use_container_width=True):
+        st.session_state.tl_start = date.today() - timedelta(days=1)
+        st.session_state.tl_end = date.today()
+        st.session_state.alert_page = 0; st.rerun()
+    if _db3.button("7d",     key="cb_q2", use_container_width=True):
+        st.session_state.tl_start = date.today() - timedelta(days=7)
+        st.session_state.tl_end = date.today()
+        st.session_state.alert_page = 0; st.rerun()
+    if _db4.button("Clear",  key="cb_q4", use_container_width=True,
+                   disabled=st.session_state.tl_start is None):
+        st.session_state.tl_start = None; st.session_state.tl_end = None
+        st.session_state.tl_playing = False; st.session_state.alert_page = 0; st.rerun()
+    if not daily_summary.empty:
+        with st.form("cb_date_form"):
+            _cb_dr = st.date_input(
+                "Range",
+                value=(st.session_state.tl_start or _sb_min_date,
+                       st.session_state.tl_end   or _sb_max_date),
+                min_value=_sb_min_date,
+                max_value=max(_sb_max_date, date.today()),
+                label_visibility="collapsed",
+            )
+            if st.form_submit_button("Apply", use_container_width=True):
+                if isinstance(_cb_dr, (list, tuple)) and len(_cb_dr) == 2:
+                    st.session_state.tl_start = _cb_dr[0]; st.session_state.tl_end = _cb_dr[1]
+                elif isinstance(_cb_dr, date):
+                    st.session_state.tl_start = _cb_dr; st.session_state.tl_end = _cb_dr
+                st.session_state.alert_page = 0; st.rerun()
+    if st.session_state.tl_start:
+        _active_rng = (
+            st.session_state.tl_start.strftime("%b %d")
+            if st.session_state.tl_start == st.session_state.tl_end
+            else f"{st.session_state.tl_start.strftime('%b %d')} – {st.session_state.tl_end.strftime('%b %d')}"
+        )
+        st.markdown(f'<div class="ctrl-date-badge">▸ {_active_rng}</div>', unsafe_allow_html=True)
+
+with _cb4:
+    st.markdown('<div class="ctrl-label">Map Layer</div>', unsafe_allow_html=True)
+    show_incidents = st.checkbox("Incident sites", value=st.session_state.show_incidents, key="ctrl_inc")
+    st.session_state.show_incidents = show_incidents
+    colour_by = st.radio(
+        "Colour by",
+        ["Output Class (PS classification)", "Alert Severity"],
+        index=["Output Class (PS classification)", "Alert Severity"].index(st.session_state.colour_by),
+        label_visibility="collapsed", key="ctrl_clr",
+    )
+    st.session_state.colour_by = colour_by
+
+with _cb5:
+    st.markdown('<div class="ctrl-label">Pipeline</div>', unsafe_allow_html=True)
+    if st.button("Re-run", key="cb_pipe", use_container_width=True):
+        with st.spinner("Running…"):
+            r = run_pipeline(fresh=True)
+            load_scored.clear()
+            load_incidents.clear()
+        st.success(f"CRITICAL: {r['counts']['CRITICAL']}  HIGH: {r['counts']['HIGH']}")
+        st.rerun()
+
+st.markdown('<div style="border-top:1px solid var(--bd-1);margin:8px 0 20px"></div>',
+            unsafe_allow_html=True)
+
+
 # ── Apply timeline date filter ─────────────────────────────────────────────────
 _tl_s = st.session_state.tl_start
 _tl_e = st.session_state.tl_end
@@ -940,15 +899,21 @@ else:
 col_alert, col_map = st.columns([1, 1.65], gap="medium")
 
 # ── Alert feed ─────────────────────────────────────────────────────────────────
+_PAGE_SIZE = 10
+
 with col_alert:
     alerts = alert_store.get_alerts(
         severity=sev_filter or None,
         status=status_filter or None,
     )
-    # Apply date filter in Python (avoids any signature-change risk on cloud)
     if _tl_s and _tl_e:
         _s_iso, _e_iso = _tl_s.isoformat(), _tl_e.isoformat()
         alerts = [a for a in alerts if _s_iso <= a.get("acq_date", "") <= _e_iso]
+
+    _n_total = len(alerts)
+    _n_pages = max(1, (_n_total + _PAGE_SIZE - 1) // _PAGE_SIZE)
+    _page    = min(st.session_state.alert_page, _n_pages - 1)
+    _page_alerts = alerts[_page * _PAGE_SIZE : (_page + 1) * _PAGE_SIZE]
 
     _date_meta = ""
     if _tl_s:
@@ -959,50 +924,58 @@ with col_alert:
         )
         _date_meta = f"&nbsp;·&nbsp; {_rng}"
 
+    _pager_str = f"pg {_page+1}/{_n_pages}" if _n_pages > 1 else ""
     st.markdown(f"""
 <div class="feed-header">
   <div class="feed-title">Alert Feed</div>
-  <div class="feed-meta">{len(alerts)} shown{_date_meta}</div>
+  <div class="feed-meta">{_n_total} total{_date_meta}
+    {f'&nbsp;·&nbsp; {_pager_str}' if _pager_str else ''}
+  </div>
 </div>
 """, unsafe_allow_html=True)
 
-    with st.container(height=420, border=False):
-        if not alerts:
-            st.markdown(
-                '<div style="padding:24px 0;font-size:11px;color:var(--t2);text-align:center">'
-                'No alerts match the current filters.</div>',
+    if not alerts:
+        st.markdown(
+            '<div style="padding:24px 0;font-size:11px;color:var(--t2);text-align:center">'
+            'No alerts match the current filters.</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        _cur_sev = None
+        for a in _page_alerts:
+            if a["severity"] != _cur_sev:
+                _cur_sev = a["severity"]
+                # count of this severity in full list for the section header
+                _sev_ct  = sum(1 for x in alerts if x["severity"] == _cur_sev)
+                st.markdown(_sev_section_head(_cur_sev, _sev_ct), unsafe_allow_html=True)
+            st.markdown(_alert_card(a), unsafe_allow_html=True)
+            if a["severity"] in ("CRITICAL", "HIGH") and a["status"] in ("ALERTED", "ESCALATED"):
+                _b1, _b2, _b3 = st.columns(3)
+                if _b1.button("Acknowledge", key=f"ack_{a['alert_id']}"):
+                    alert_store.update_status(a["alert_id"], "MONITORING")
+                    st.rerun()
+                if _b2.button("Escalate", key=f"esc_{a['alert_id']}"):
+                    alert_store.update_status(a["alert_id"], "ESCALATED")
+                    st.rerun()
+                if _b3.button("Resolve", key=f"res_{a['alert_id']}"):
+                    alert_store.update_status(a["alert_id"], "EXTINGUISHED")
+                    st.rerun()
+
+        # Pagination controls
+        if _n_pages > 1:
+            st.markdown('<div style="height:10px"></div>', unsafe_allow_html=True)
+            _ppc1, _ppc2, _ppc3 = st.columns([1, 2, 1])
+            if _ppc1.button("← Prev", key="ap_prev", disabled=_page == 0,
+                            use_container_width=True):
+                st.session_state.alert_page = _page - 1; st.rerun()
+            _ppc2.markdown(
+                f'<div style="text-align:center;font-size:10px;color:var(--t1);'
+                f'font-family:var(--mono);padding:6px 0">{_page+1} / {_n_pages}</div>',
                 unsafe_allow_html=True,
             )
-        else:
-            for sev in ["CRITICAL", "HIGH", "MEDIUM", "LOW"]:
-                if sev not in sev_filter:
-                    continue
-                sev_alerts = [a for a in alerts if a["severity"] == sev]
-                if not sev_alerts:
-                    continue
-
-                st.markdown(_sev_section_head(sev, len(sev_alerts)), unsafe_allow_html=True)
-
-                for a in sev_alerts[:20]:
-                    st.markdown(_alert_card(a), unsafe_allow_html=True)
-                    if sev in ("CRITICAL", "HIGH") and a["status"] in ("ALERTED", "ESCALATED"):
-                        _b1, _b2, _b3 = st.columns(3)
-                        if _b1.button("Acknowledge", key=f"ack_{a['alert_id']}"):
-                            alert_store.update_status(a["alert_id"], "MONITORING")
-                            st.rerun()
-                        if _b2.button("Escalate", key=f"esc_{a['alert_id']}"):
-                            alert_store.update_status(a["alert_id"], "ESCALATED")
-                            st.rerun()
-                        if _b3.button("Resolve", key=f"res_{a['alert_id']}"):
-                            alert_store.update_status(a["alert_id"], "EXTINGUISHED")
-                            st.rerun()
-
-                if len(sev_alerts) > 20:
-                    st.markdown(
-                        f'<div style="font-size:9px;color:var(--t2);padding:6px 0">'
-                        f'+ {len(sev_alerts) - 20} more alerts</div>',
-                        unsafe_allow_html=True,
-                    )
+            if _ppc3.button("Next →", key="ap_next", disabled=_page >= _n_pages - 1,
+                            use_container_width=True):
+                st.session_state.alert_page = _page + 1; st.rerun()
 
 
 # ── Map ────────────────────────────────────────────────────────────────────────
