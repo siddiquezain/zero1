@@ -146,16 +146,16 @@ html, body, [data-testid="stAppViewContainer"] {
   margin-bottom: 20px;
 }
 .ctrl-label {
-  font-size: 8px; font-weight: 600; letter-spacing: 0.14em;
-  text-transform: uppercase; color: var(--t2); margin-bottom: 5px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.10em;
+  text-transform: uppercase; color: var(--t1); margin-bottom: 6px;
 }
 .ctrl-sep {
   width: 1px; background: var(--bd-1); align-self: stretch; margin: 0 16px;
   flex-shrink: 0;
 }
 .ctrl-date-badge {
-  font-size: 9px; font-family: var(--mono); color: var(--sys);
-  letter-spacing: 0.06em; margin-top: 4px;
+  font-size: 11px; font-family: var(--mono); color: var(--sys);
+  letter-spacing: 0.05em; margin-top: 5px;
 }
 /* Streamlit sidebar hidden — all controls are in top bar */
 [data-testid="stSidebar"] { display: none !important; }
@@ -186,12 +186,12 @@ html, body, [data-testid="stAppViewContainer"] {
 }
 [data-testid="stTabs"] [role="tab"] {
   font-family: var(--font) !important;
-  font-size: 9px !important;
+  font-size: 11px !important;
   font-weight: 600 !important;
-  letter-spacing: 0.14em !important;
+  letter-spacing: 0.10em !important;
   text-transform: uppercase !important;
-  color: var(--t2) !important;
-  padding: 10px 16px !important;
+  color: var(--t1) !important;
+  padding: 10px 18px !important;
   border-radius: 0 !important;
   transition: color 0.12s;
 }
@@ -221,11 +221,11 @@ span[data-tag] button { color: var(--t1) !important; }
   font-family: var(--font) !important;
 }
 label[data-testid="stWidgetLabel"] {
-  font-size: 9px !important;
+  font-size: 12px !important;
   font-weight: 600 !important;
-  letter-spacing: 0.12em !important;
+  letter-spacing: 0.08em !important;
   text-transform: uppercase !important;
-  color: var(--t2) !important;
+  color: var(--t1) !important;
 }
 
 /* === SYSTEM BAR === */
@@ -278,7 +278,7 @@ label[data-testid="stWidgetLabel"] {
 .ss-val-cr { color: var(--cr); }
 .ss-val-hi { color: var(--hi); }
 .ss-sub {
-  font-size: 10px; color: var(--t1); margin-top: 3px;
+  font-size: 11px; color: var(--t1); margin-top: 3px;
   font-family: var(--mono);
 }
 
@@ -289,16 +289,16 @@ label[data-testid="stWidgetLabel"] {
   margin-bottom: 14px;
 }
 .feed-title {
-  font-size: 10px; font-weight: 600; letter-spacing: 0.12em;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.10em;
   text-transform: uppercase; color: var(--t1);
 }
-.feed-meta { font-family: var(--mono); font-size: 10px; color: var(--t1); }
+.feed-meta { font-family: var(--mono); font-size: 11px; color: var(--t1); }
 
 .sev-head {
-  font-size: 8px; font-weight: 600; letter-spacing: 0.18em;
-  text-transform: uppercase; padding: 10px 0 8px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.10em;
+  text-transform: uppercase; padding: 12px 0 8px;
   border-bottom: 1px solid var(--bd-0);
-  margin-bottom: 2px;
+  margin-bottom: 4px;
 }
 .sev-head-cr { color: var(--cr); }
 .sev-head-hi { color: var(--hi); }
@@ -316,7 +316,7 @@ label[data-testid="stWidgetLabel"] {
   display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
 }
 .ac-sev {
-  font-size: 8px; font-weight: 700; letter-spacing: 0.12em;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.10em;
   text-transform: uppercase;
 }
 .sev-CRITICAL { color: var(--cr); }
@@ -325,13 +325,13 @@ label[data-testid="stWidgetLabel"] {
 .sev-LOW      { color: var(--lo); }
 
 .ac-type {
-  font-size: 9px; color: var(--t2); font-weight: 500; letter-spacing: 0.04em;
+  font-size: 11px; color: var(--t1); font-weight: 500; letter-spacing: 0.03em;
 }
 .ac-right {
   margin-left: auto; display: flex; align-items: center; gap: 10px;
 }
 .ac-status {
-  font-size: 8px; font-weight: 600; letter-spacing: 0.12em;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 .status-DETECTED    { color: var(--t2); }
@@ -342,7 +342,7 @@ label[data-testid="stWidgetLabel"] {
 .status-EXTINGUISHED { color: var(--t2); }
 
 .ac-date {
-  font-family: var(--mono); font-size: 9px; color: var(--t2);
+  font-family: var(--mono); font-size: 11px; color: var(--t1);
 }
 .ac-loc {
   font-size: 12px; font-weight: 500; color: var(--t0);
@@ -350,15 +350,15 @@ label[data-testid="stWidgetLabel"] {
 }
 .ac-metrics {
   display: flex; flex-wrap: wrap; gap: 14px;
-  font-family: var(--mono); font-size: 10px; color: var(--t2);
-  margin-bottom: 2px;
+  font-family: var(--mono); font-size: 12px; color: var(--t1);
+  margin-bottom: 4px;
 }
 .ac-metrics em {
   font-style: normal; color: var(--t0); font-weight: 500;
 }
 .ac-narr {
-  font-size: 10px; color: var(--t1); line-height: 1.6;
-  padding-top: 6px; border-top: 1px solid var(--bd-0);
+  font-size: 12px; color: var(--t1); line-height: 1.65;
+  padding-top: 8px; border-top: 1px solid var(--bd-0);
   margin-top: 6px;
 }
 
@@ -369,19 +369,19 @@ label[data-testid="stWidgetLabel"] {
   margin-bottom: 10px;
 }
 .map-title {
-  font-size: 10px; font-weight: 600; letter-spacing: 0.12em;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.10em;
   text-transform: uppercase; color: var(--t1);
 }
 .map-mode {
   font-size: 12px; font-weight: 500; color: var(--t0);
   margin-top: 3px;
 }
-.map-ts { font-family: var(--mono); font-size: 10px; color: var(--t1); }
+.map-ts { font-family: var(--mono); font-size: 11px; color: var(--t1); }
 .map-legend {
   display: flex; gap: 20px; flex-wrap: wrap;
   padding-top: 10px; border-top: 1px solid var(--bd-0);
-  font-size: 9px; font-weight: 500; letter-spacing: 0.04em;
-  text-transform: uppercase; color: var(--t2);
+  font-size: 11px; font-weight: 500; letter-spacing: 0.03em;
+  text-transform: uppercase; color: var(--t1);
 }
 .leg { display: flex; align-items: center; gap: 5px; }
 .leg-sq {
@@ -390,11 +390,11 @@ label[data-testid="stWidgetLabel"] {
 
 .hist-mode-bar {
   display: flex; align-items: center; gap: 12px;
-  padding: 7px 12px; margin-bottom: 10px;
+  padding: 8px 14px; margin-bottom: 10px;
   background: rgba(61,125,200,0.05);
   border: 1px solid rgba(61,125,200,0.14);
   border-radius: var(--r);
-  font-family: var(--mono); font-size: 9px; color: #6080b0;
+  font-family: var(--mono); font-size: 11px; color: #6080b0;
 }
 .hist-mode-bar b { color: #8090cc; font-weight: 500; }
 
@@ -510,7 +510,7 @@ label[data-testid="stWidgetLabel"] {
 .tl-play-state {
   padding: 8px 14px; border-radius: var(--r);
   background: rgba(61,125,200,0.06); border: 1px solid rgba(61,125,200,0.14);
-  font-family: var(--mono); font-size: 10px; color: #6080b0;
+  font-family: var(--mono); font-size: 11px; color: #6080b0;
   margin-bottom: 10px;
 }
 
@@ -1578,7 +1578,7 @@ with tab_model:
     with _mc1:
         st.markdown("""
 <div style="font-size:11px;color:var(--t1);line-height:1.8">
-<div style="font-size:9px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;
+<div style="font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;
             color:var(--t2);margin-bottom:10px">Data Sources (PS requirement)</div>
 <b style="color:var(--t0)">Satellite</b><br>
 NASA FIRMS VIIRS 375m NRT — thermal anomaly data<br><br>
@@ -1588,11 +1588,11 @@ Coordinate-based India zone classification + agri-season flag<br><br>
 WRI GPPD (34,936 power plants) + OSM industrial polygons (37,688 India features)<br><br>
 <b style="color:var(--t0)">Gas flare catalogue</b><br>
 ORNL DAAC VNF 2012–2019 (83,641 sites, 1,500–2,000 K spectral temp)<br><br>
-<div style="font-size:9px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;
+<div style="font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;
             color:var(--t2);margin:14px 0 8px">Facility Types Covered</div>
 Oil Refinery &nbsp;·&nbsp; Thermal Power Plant &nbsp;·&nbsp; Mining<br>
 Steel/Metal &nbsp;·&nbsp; Brick Kiln &nbsp;·&nbsp; LNG/Gas &nbsp;·&nbsp; Chemical/Pharma<br><br>
-<div style="font-size:9px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;
+<div style="font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;
             color:var(--t2);margin-bottom:8px">Labeling Approach</div>
 VNF used as spatial oracle — FIRMS within 5 km of a VNF site &rarr; Persistent Source.
 Remaining global FIRMS &rarr; Natural Fire candidate.
@@ -1603,7 +1603,7 @@ Anomaly (max_prob &lt; 0.55) &rarr; Industrial Fire.
     with _mc2:
         st.markdown("""
 <div style="font-size:11px;color:var(--t1);line-height:1.8">
-<div style="font-size:9px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;
+<div style="font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;
             color:var(--t2);margin-bottom:10px">Three-Way Evaluation (anti-leakage design)</div>
 </div>
 """, unsafe_allow_html=True)
@@ -1616,7 +1616,7 @@ Anomaly (max_prob &lt; 0.55) &rarr; Industrial Fire.
 
         st.markdown("""
 <div style="font-size:11px;color:var(--t1);line-height:1.8;margin-top:14px">
-<div style="font-size:9px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;
+<div style="font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;
             color:var(--t2);margin-bottom:10px">Feature Importances</div>
 </div>
 """, unsafe_allow_html=True)
@@ -1668,7 +1668,7 @@ with tab_limits:
     for _title, _body in _lim_items:
         st.markdown(f"""
 <div style="padding:12px 0;border-bottom:1px solid var(--bd-0)">
-  <div style="font-size:9px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;
+  <div style="font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;
               color:var(--t2);margin-bottom:5px">{_title}</div>
   <div style="font-size:11px;color:var(--t1);line-height:1.75">{_body}</div>
 </div>
