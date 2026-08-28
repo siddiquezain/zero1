@@ -750,7 +750,8 @@ _sb_dates_iso = daily_summary["acq_date"].tolist() if not daily_summary.empty el
 _sb_min_date  = date.fromisoformat(_sb_dates_iso[0])  if _sb_dates_iso else date.today()
 _sb_max_date  = date.fromisoformat(_sb_dates_iso[-1]) if _sb_dates_iso else date.today()
 c             = alert_store.counts()
-now_str   = datetime.now(timezone.utc).strftime("%H:%M UTC")
+_IST = timezone(timedelta(hours=5, minutes=30))
+now_str   = datetime.now(_IST).strftime("%H:%M IST")
 
 
 # ── System bar ─────────────────────────────────────────────────────────────────
@@ -926,7 +927,7 @@ else:
 col_alert, col_map = st.columns([1, 1.65], gap="medium")
 
 # ── Alert feed ─────────────────────────────────────────────────────────────────
-_PAGE_SIZE = 10
+_PAGE_SIZE = 5
 
 with col_alert:
     alerts = alert_store.get_alerts(
