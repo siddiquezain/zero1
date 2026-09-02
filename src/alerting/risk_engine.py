@@ -39,7 +39,7 @@ SEVERITY TIERS (score 0–100):
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import pandas as pd
 
@@ -167,6 +167,9 @@ class RiskResult:
     nearest_city: str
     dist_nearest_city_km: float
     near_population: int
+    # Additive: the (reason, +points) components that produced `score`.
+    # Used by the Investigation view; existing callers/behaviour unchanged.
+    factors: list = field(default_factory=list)
 
 
 def _haversine_km(lat1, lon1, lat2, lon2) -> float:
@@ -210,50 +213,56 @@ def score_row(row: dict | pd.Series) -> RiskResult:
     day_night = str(row.get("day_night", "") or "")
 
     s = 0
+    factors: list[tuple[str, int]] = []
+
+    def _add(delta: int, reason: str) -> None:
+        nonlocal s
+        s += delta
+        factors.append((reason, delta))
 
     # Anomaly flag
     if anomaly:
-        s += 30
+        _add(30, "Pattern anomaly — matches neither persistent-flare nor natural-fire pattern")
 
     # FRP
     if frp >= 30:
-        s += 25
+        _add(25, f"Very high Fire Radiative Power ({frp:.0f} MW)")
     elif frp >= 15:
-        s += 15
+        _add(15, f"Elevated Fire Radiative Power ({frp:.0f} MW)")
     elif frp >= 5:
-        s += 8
+        _add(8, f"Moderate Fire Radiative Power ({frp:.0f} MW)")
 
     # Persistence
     if persist >= 4:
-        s += 20
+        _add(20, f"Highly persistent — {persist} repeat detections in the window")
     elif persist >= 2:
-        s += 10
+        _add(10, f"Repeat detections — {persist} in the window")
 
     # Facility proximity
     if dist_fac < 1:
-        s += 20
+        _add(20, f"Immediately adjacent to an industrial facility ({dist_fac:.1f} km)")
     elif dist_fac < 5:
-        s += 12
+        _add(12, f"Close to an industrial facility ({dist_fac:.1f} km)")
     elif dist_fac < 15:
-        s += 6
+        _add(6, f"Near an industrial facility ({dist_fac:.1f} km)")
 
     # Classifier
     if pred == "A":
-        s += 10
+        _add(10, "Model classifies as a persistent industrial thermal source")
 
     # FIRMS confidence
     if _confidence_high(conf):
-        s += 8
+        _add(8, "High FIRMS detection confidence")
 
     # Nighttime (industrial flares burn continuously; nighttime detection reduces
     # natural-fire noise and increases confidence it's an industrial source)
     if day_night == "N":
-        s += 5
+        _add(5, "Night-time detection")
 
     # Population proximity
     city, city_dist_km, city_pop = _nearest_city(lat, lon)
     if city_dist_km < 30:
-        s += 10
+        _add(10, f"Near a population centre — {city} ({city_dist_km:.0f} km)")
 
     # Severity bands
     if s >= 65:
@@ -306,6 +315,7 @@ def score_row(row: dict | pd.Series) -> RiskResult:
         nearest_city=city,
         dist_nearest_city_km=round(city_dist_km, 1),
         near_population=city_pop if city_dist_km < 50 else 0,
+        factors=factors,
     )
 
 
@@ -323,7 +333,13 @@ def score_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     out["nearest_city"] = [r.nearest_city for r in results]
     out["dist_nearest_city_km"] = [r.dist_nearest_city_km for r in results]
     out["near_population"] = [r.near_population for r in results]
+    out["risk_factors"] = [list(r.factors) for r in results]
     return out
+
+
+def explain_score(row: dict | pd.Series) -> list[tuple[str, int]]:
+    """Return just the (reason, +points) breakdown for a row. Sum == risk_score."""
+    return list(score_row(row).factors)
 
 
 if __name__ == "__main__":

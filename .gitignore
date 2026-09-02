@@ -30,6 +30,13 @@ env/
 # Playwright
 .playwright-mcp/
 dashboard/screenshot*.png
+dashboard/static/mvtest.html
+
+# Keep bundled runtime assets (needed to run the app offline)
+!dashboard/static/bb-8.glb
+!dashboard/static/model-viewer.min.js
+!data/geo/*.json
+!data/geo/*.geojson
 
 # OS
 .DS_Store

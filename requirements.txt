@@ -4,9 +4,14 @@ requests>=2.31
 scikit-learn>=1.3
 joblib>=1.3
 numpy>=1.24
-streamlit>=1.61
+streamlit>=1.40
 pydeck>=0.9
+plotly>=5.20
 python-dotenv>=1.0
 matplotlib>=3.7
 scipy>=1.11
 tqdm>=4.66
+
+# Optional — enables the Claude runtime for the Fire Intelligence Agent.
+# The app + deterministic agent work fully WITHOUT this / an API key.
+anthropic>=0.40

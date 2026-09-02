@@ -9,6 +9,7 @@ via acknowledge / escalate / resolve actions.
 """
 from __future__ import annotations
 
+import json
 import sqlite3
 import uuid
 from datetime import datetime, timezone
@@ -60,6 +61,8 @@ CREATE TABLE IF NOT EXISTS alerts (
     acq_date              TEXT,
     day_night             TEXT,
     narrative             TEXT,
+    -- JSON list of [reason, points] pairs that produced risk_score
+    risk_factors          TEXT,
     created_at            TEXT,
     updated_at            TEXT,
     acknowledged_at       TEXT
@@ -115,8 +118,8 @@ def insert_alerts(rows: list[dict]) -> int:
                 dist_nearest_facility_km, nearest_facility_type,
                 predicted_label, prob_A, prob_B, anomaly_flag,
                 nearest_city, dist_nearest_city_km, near_population,
-                acq_date, day_night, narrative, created_at, updated_at
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                acq_date, day_night, narrative, risk_factors, created_at, updated_at
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 str(uuid.uuid4())[:12],
                 row["lat"], row["lon"],
@@ -141,6 +144,7 @@ def insert_alerts(rows: list[dict]) -> int:
                 str(row.get("acq_date", "") or ""),
                 str(row.get("day_night", "") or ""),
                 str(row.get("narrative", "") or ""),
+                json.dumps(row.get("risk_factors") or []),
                 now, now,
             ),
         )
@@ -173,7 +177,15 @@ def get_alerts(
         [*params, limit],
     ).fetchall()
     con.close()
-    return [dict(r) for r in rows]
+    out = []
+    for r in rows:
+        d = dict(r)
+        try:
+            d["risk_factors"] = json.loads(d.get("risk_factors") or "[]")
+        except (TypeError, ValueError):
+            d["risk_factors"] = []
+        out.append(d)
+    return out
 
 
 def update_status(alert_id: str, new_status: str) -> None:
