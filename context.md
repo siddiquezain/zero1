@@ -1,186 +1,647 @@
-# SIH26162 — Project Context
+# SIH26162 — Project Context (Source of Truth)
 
-Read this file in full before doing any work. It is the single source of truth for what this project is, what's already decided, and what not to do. Update the **Status Tracker** at the bottom after every session.
+> Read this file in full before doing any work. It describes what the project is,
+> what is already built, what is planned, and what must not be done or claimed.
+> Update the **Status Tracker** at the bottom after every work session.
+>
+> Companion documents at repo root:
+> - `design_brief.md` — product identity + UI/UX blueprint per screen
+> - `architecture.md` — technical architecture, modules, interfaces, agent design
+> - `workflow.md` — end-to-end operational workflow and user journeys
+> - `.claude/plans/starry-rolling-pnueli.md` — the approved implementation plan
 
-## What this project is
+---
 
-An AI system that classifies satellite-detected thermal hotspots (from NASA FIRMS) into:
-1. **Persistent industrial thermal source** (flares, kilns, routine process heat)
-2. **Natural / agricultural fire** (wildfire, crop-residue burning)
-3. **Anomaly** — doesn't match either learned pattern; flagged for human review
+## 1. Project identity
 
-Built for SIH26162 (NTRO, Smart India Hackathon 2026): "AI-Based Detection and Classification of Industrial Fires and Persistent Thermal Sources Using NASA FIRMS, OSM & Satellite Data."
+| | |
+|---|---|
+| **Project name** | India Fire Intelligence Platform (Team ZeroOne) |
+| **SIH problem statement** | SIH26162 |
+| **Sponsor / context** | NTRO (National Technical Research Organisation), Smart India Hackathon 2026 |
+| **Official PS title** | "AI-Based Detection and Classification of Industrial Fires and Persistent Thermal Sources Using NASA FIRMS, OSM & Satellite Data" |
+| **Immediate milestone** | Internal hackathon demo — 5 September |
 
-## Hard constraints — do not violate these
+### Problem statement in our own words
 
-These come directly from research already done. Violating them will produce a system that looks fine locally but falls apart under questioning.
+Satellite thermal-anomaly feeds (NASA FIRMS MODIS/VIIRS) report *where* a hotspot
+is, but never *what caused it*. Operators monitoring Indian industrial regions
+cannot easily separate an accidental industrial fire from a routine gas flare,
+a steel-plant thermal signature, or seasonal crop-residue burning — and the raw
+feed offers no prioritisation, no context, and no explanation. There is also no
+existing dataset of confirmed industrial fire incidents anywhere in the world to
+train a direct classifier on.
 
-- **There is no dataset of confirmed industrial fire incidents anywhere — India or global.** Do not build, or claim to build, a classifier trained on confirmed industrial fire events. Checked and confirmed absent: PESO, NDMA/NDMIS, IDRN, NCRB, DGMS, CPCB (India); no global equivalent found either.
-- **A FIRMS hotspot is not typed by cause.** NASA states explicitly that MODIS/VIIRS active-fire products do not attribute anomaly type (fire vs. flare vs. volcano vs. other). Never treat a raw hotspot as a labelled example of anything.
-- **"Near a facility" is not a label.** Distance-to-facility is a weak context *feature*, never a ground-truth signal. VIIRS Nightfire itself separates flares from fires using temperature + persistence, not proximity — follow that precedent.
-- **Do not restrict training data to India only.** The physical signatures (temperature bands, persistence patterns) are not India-specific. Restricting to India-filtered data shrinks an already-thin dataset for no benefit. Train on global data; **hold out India entirely as the test/validation region** instead.
-- **Never use a random train/test split on this data.** Repeated detections from the same facility will leak across a random split and inflate reported accuracy by 6–28 percentage points (documented across multiple studies). Split by facility ID / spatial grid cell, or by holding out India as a region, not randomly.
-- **Log every unmatched confirmed incident — don't discard it.** When matching manually-curated incidents against FIRMS and no hotspot is found nearby, that's a finding (satellite omission), not a failed row to drop.
-- **The pitch/demo must never claim "confirmed industrial fire detection."** The locked framing is: *"We detect anomalous departures from known persistent-industrial and natural-fire patterns — not confirmed fires, because no training data for that exists anywhere."* Any code, dashboard label, or slide that implies otherwise contradicts the whole design.
+### Why it matters
 
-## Data sources
+Industrial fires near refineries, chemical plants, power stations and mining
+areas threaten life, infrastructure and the environment. Faster, better-prioritised
+detection with clear supporting evidence lets disaster-management and monitoring
+agencies investigate the right sites first. Persistent-thermal-source monitoring
+also supports environmental compliance and industrial-activity intelligence.
 
-| Source | Identifier | What it gives you | Notes |
-|---|---|---|---|
-| NASA FIRMS | firms.modaps.eosdis.nasa.gov (MODIS 1km, VIIRS 375m) | Raw NRT + archive hotspot detections: lat/lon, brightness temp, FRP, confidence, date/time, day/night flag | Global, India-filterable, no access restriction. Requires a free account/API key for bulk archive downloads. |
-| VIIRS Nightfire (VNF) global flare catalogue | ORNL DAAC, DOI 10.3334/ORNLDAAC/1874 | Pre-labelled global gas flare sites, separated from biomass burning by temperature (1500–2000K) + persistence | Use as-is for Class A positives — do not relabel. |
-| GIHS (Global Industrial Heat Sources) | Ma et al. 2024, *Scientific Data*, DOI 10.1038/s41597-024-03461-3 | 25,544 validated industrial heat source objects, 90.95–93.46% user accuracy | **Verify the public repository link (Figshare/PANGAEA/Zenodo) before assuming it's downloadable — unconfirmed as of last check.** |
-| Global Energy Monitor trackers | globalenergymonitor.org, CC BY 4.0 | Asset-level coordinates for refineries, oil/gas plants, pipelines — India included | Free, open, well-suited to the facility-proximity feature. |
-| Global Power Plant Database | World Resources Institute, CC-BY-4.0 | ~28,500 power plant locations globally, India included | |
-| OpenStreetMap (Overpass API) | `landuse=industrial` tagging | Industrial facility polygons | Coverage in India is inconsistent — spot-check density around known clusters before trusting it broadly. |
-| CPCB Red-category industry lists | cpcb.nic.in | Sector/type context for ~1,861 major-accident-hazard units | Sector lists only, not geocoded — supplementary context, not a coordinate source. |
-| Vadrevu & Lasko (2018) | *Remote Sensing*, DOI 10.3390/rs10070978 | Methodology for building the agricultural-burning class (VIIRS/MODIS + cropland + seasonal window + GFED cross-check, Punjab) | Replicate this method, not their exact data. |
+### Core objective
 
-## Pipeline — what to build, in order
+Turn the raw NASA FIRMS thermal feed over India into a prioritised, explained,
+GIS-based operational picture that distinguishes:
 
-Each stage is a separate work session. Verify output (row counts, a plotted sample) before moving to the next.
+1. **Industrial Fire / Abnormal Thermal Event** — anomalous: matches neither the
+   persistent-industrial nor the natural-fire learned pattern (candidate for human
+   review; *not* a confirmed fire).
+2. **Persistent Industrial Thermal Source** — continuous industrial heat: gas
+   flares, kilns, smelters, thermal power plants.
+3. **Forest / Agricultural Fire** — natural or crop-residue burning.
 
-### 1. Data ingestion
-Download FIRMS archive (MODIS + VIIRS) for an India bounding box, several years back. Download the VNF flare catalogue. Confirm GIHS access. Output: raw CSVs, row counts logged, a quick map plot to sanity-check coordinates look right.
+### What the system actually does
 
-### 2. Facility/context layer
-Pull Global Energy Monitor trackers + Global Power Plant DB + OSM industrial polygons (Overpass API) for India. Merge into one facility table: `facility_id, lat, lon, type, source`.
+- Ingests NASA FIRMS NRT detections for the India bounding box.
+- Enriches each detection with engineered features: brightness temperature, FRP,
+  persistence count, day/night, distance to nearest industrial facility, facility
+  type, agricultural-season flag, land-cover context.
+- Classifies each detection into the 3 output classes above using a globally
+  trained Random Forest (India held out of training) plus an anomaly rule.
+- Scores each detection with a transparent rule-based **risk engine** (0–100) and
+  assigns a severity (CRITICAL / HIGH / MEDIUM / LOW).
+- Raises alerts into a SQLite store with a lifecycle
+  (DETECTED → VALIDATING → ALERTED → ESCALATED → MONITORING → EXTINGUISHED).
+- Presents everything on a dark operations dashboard: situation overview, alert
+  feed, India detection map, historical timeline/calendar, classification and
+  model transparency panels, and GIS export (GeoJSON / CSV).
+- Scores a curated set of 30 real past Indian industrial incidents as an
+  independent evaluation / demo set.
 
-### 3. Label construction
-- **Class A (positive):** VNF flare entries + GIHS objects, tagged `source_dataset`.
-- **Class B (negative):** FIRMS hotspots filtered to (a) forest/vegetation land cover with short-burst, non-persistent detection pattern → wildfire; (b) cropland + known seasonal windows (e.g., Oct–Nov Punjab/Haryana) → agricultural burning. Sanity-check volumes against GFED.
-- **Confirmed-incident set (small, manual):** Compile ~30–100 major Indian industrial fires from news/Wikipedia with precise coordinates and dates (human-curated — do not fully automate source-reliability judgment). Match against FIRMS/VIIRS within a ~375m–1km spatial buffer and ±1 day window. Keep a column for `matched: yes/no` — unmatched rows are a finding, not noise to remove.
+### Target users
 
-### 4. Feature engineering
-Per hotspot, compute: brightness temperature, FRP, persistence count (same ~1km cell re-lit over trailing N days — the single best discriminator per the literature), day/night flag, land-cover class, distance to nearest facility (from Stage 2's table), facility type if within threshold, agri-season flag. These are model inputs, never labels.
+- Disaster-management / emergency-monitoring analysts.
+- Industrial-safety and environmental-compliance monitoring teams.
+- Technical evaluators (SIH judges, NTRO/ISRO/NRSA-adjacent audiences).
 
-### 5. Assemble & split
-Merge Class A + Class B into one feature table. **Group by `facility_id` or spatial grid cell before splitting.** Hold out all India rows as the test set; train on the rest of the world's Class A/B data.
+### Core use cases
 
-### 6. Train & validate
-Random Forest or XGBoost (tabular — prefer explainability over deep learning given the labelled-sample size and the need to justify predictions). Report **two accuracy numbers side by side**: standard random-split accuracy, and the facility/spatial-holdout (India-held-out) accuracy. The gap between them is evidence the leakage problem was handled correctly — report it, don't hide it.
+1. **Situational awareness** — "What thermal activity is happening over India
+   right now, and how serious is it?"
+2. **Triage** — "Which alerts need attention first?"
+3. **Investigation** — "Why was this specific detection flagged, and what should
+   we do about it?"
+4. **Historical analysis** — "How does today compare to the recent baseline?"
+5. **Facility monitoring** — "What is happening around known industrial sites?"
+6. **Reporting / hand-off** — "Export the current picture for GIS tools or a
+   briefing."
+7. **Natural-language access** — "Ask the platform instead of manually driving
+   filters." (Fire Intelligence Agent, read-only.)
 
-### 7. Incident scoring & anomaly demo
-Run the Stage-3 confirmed-incident set (the matched ones) through the trained model. The goal outcome: they land in neither Class A nor Class B cleanly — i.e., they get flagged as anomalies. That result is the actual product demo.
+---
 
-### 8. Dashboard
-Map view over India, hotspots colour-coded by predicted class (A / B / anomaly). Highlight 2–3 case studies: a real flare correctly classified as Class A, a real Punjab/Haryana ag-burning cluster as Class B, and a past major incident (e.g., 2025 Sigachi Telangana blast — has public coordinates) run through the pipeline to show either a correct anomaly flag or, if unmatched, an honest demonstration of the omission-rate limitation.
+## 2. Scope
 
-## Setup required before Stage 1 (human, not agent)
+### Approved scope (current round — targeting 5 Sept)
 
-- [ ] NASA Earthdata account registered (needed for bulk archive downloads)
-- [ ] FIRMS API key / archive-download access confirmed for an India bounding box
-- [ ] GIHS public repository link located and confirmed downloadable
-- [ ] If running in a sandboxed/cloud agent environment: confirm network access to ORNL DAAC, NASA FIRMS, Overpass API, and Global Energy Monitor domains
+- **Information-architecture reorganisation** of the existing Streamlit app into
+  clear sections: Command Center, Alerts, Investigation, Map, Analytics,
+  Facilities, Reports / GIS, Model, Limitations. Every existing feature keeps a
+  deliberate home.
+- **`src/intelligence/` service + tool layer** — a framework-agnostic Python layer
+  that both the manual UI and the agent call. No business logic duplicated in the
+  UI.
+- **Offline lat/lon → Indian state / region resolver** (`src/intelligence/geo.py`)
+  using a bundled simplified state-boundary GeoJSON and pure-Python
+  point-in-polygon.
+- **Investigation view** — assembled from existing alert fields only
+  (detection / context / why-flagged / classification / risk breakdown /
+  recommended action).
+- **Facilities view** — new view over the existing `facilities.parquet` joined to
+  detections.
+- **Analytics consolidation** — existing Timeline + Classification content plus a
+  baseline-vs-current FRP comparison (shown only when data supports it).
+- **Reports / GIS page** — existing GeoJSON/CSV export plus a Markdown/CSV incident
+  report.
+- **Fire Intelligence Agent (READ-ONLY)** — natural-language queries, data
+  analysis, filtering, navigation, map focusing, opening investigations, and
+  report generation. Deterministic offline parser is the guaranteed baseline;
+  Claude API is an optional enhancement.
+- Targeted additive change to `src/alerting/risk_engine.py`: expose the risk-score
+  factor breakdown (needed by the Investigation view). No behavioural change.
 
-## Physical basis for classification (cite this, don't reinvent it)
+### Explicitly out of scope (this round)
 
-Elvidge et al. (2016), *Energies* 9(1):14, DOI 10.3390/en9010014:
-- Gas flares: **1500–2000 K**
-- Biomass burning / industrial sites / volcanoes: **600–1300 K**
-- **1300–1500 K is an ambiguous crossover zone** — treat predictions in this band as lower-confidence.
+- Agent-initiated **Acknowledge / Escalate / Resolve** or any incident-state
+  change. (Manual controls stay fully available; the agent is read-only.)
+- Any visual-identity rebuild. The current dark operations aesthetic is kept.
+- React / FastAPI frontend. (The service layer is structured so this is possible
+  later without touching logic.)
+- Historical FIRMS archive download, GIHS integration, land-cover raster
+  integration, model retraining.
+- Real-time streaming ingestion, authentication / multi-user, notifications.
 
-## Repo structure convention
+---
+
+## 3. Implementation status
+
+Legend: **[IMPLEMENTED]** works today · **[PLANNED]** in the approved plan, not
+yet built · **[OPTIONAL/FUTURE]** may be added later · **[NOT SUPPORTED]** will
+not be built and must not be claimed.
+
+### Data & ML pipeline
+
+- **[IMPLEMENTED]** Stage 1 — FIRMS NRT ingestion for India + 6 global training
+  regions; every row tagged `split` at ingest. VNF gas-flare catalogue (83,641
+  rows). WRI Global Power Plant DB (34,936). OSM industrial polygons (37,688
+  India).
+- **[IMPLEMENTED]** Stage 2 — normalised facility table
+  `data/processed/facilities.parquet` (72,624 rows; columns: `facility_id, lat,
+  lon, facility_type, source, name, country`).
+- **[IMPLEMENTED / PARTIAL]** Stage 3 — Class A labels from VNF; Class B still
+  `B_candidate` pending land-cover validation; 30 curated confirmed incidents in
+  `data/incidents/confirmed_incidents_india.csv`.
+- **[IMPLEMENTED]** Stage 4 — feature engineering (`src/features/engineer.py`).
+- **[IMPLEMENTED]** Stage 5 — assemble & spatial-grid split (`src/model/assemble.py`,
+  `src/model/split.py` with leakage assertions).
+- **[IMPLEMENTED]** Stage 6 — Random Forest trained global, India held out.
+  Outputs committed as `data/processed/stage6_india_scores.parquet` (705 India
+  detections scored). Trained `.joblib` is git-ignored and **not in the repo** —
+  the dashboard does not need it.
+- **[IMPLEMENTED]** Stage 7 — 30 incidents scored →
+  `data/incidents/stage7_incident_scores.parquet` (21/30 anomaly-flagged).
+- **[IMPLEMENTED]** Stage 8 — single-file Streamlit dashboard `dashboard/app.py`.
+
+### Alerting / intelligence
+
+- **[IMPLEMENTED]** `src/alerting/risk_engine.py` — rule-based scoring →
+  `output_class`, `risk_score`, `severity`, `land_cover_context`,
+  `hazard_facility_type`, `narrative`, `nearest_city`, `dist_nearest_city_km`,
+  `near_population`.
+- **[IMPLEMENTED]** `src/alerting/alert_store.py` — SQLite store (`data/alerts.db`),
+  lifecycle states, `get_alerts()` / `update_status()` / `counts()` / `clear_all()`.
+- **[IMPLEMENTED]** `src/alerting/pipeline.py` — `run(fresh=…)` seeds the store
+  from `stage6_india_scores.parquet`.
+- **[IMPLEMENTED]** `dashboard/timeline.py` — daily severity aggregation and
+  range queries over `alerts.db`.
+
+### Dashboard (current, single page)
+
+- **[IMPLEMENTED]** System/situation header (active count, severity breakdown,
+  class counts).
+- **[IMPLEMENTED]** Control bar — severity / status / date (Today, 24h, 7d,
+  custom) / map-layer / pipeline re-run.
+- **[IMPLEMENTED]** Alert feed — severity-grouped, paginated (5/page),
+  expandable, with Acknowledge / Escalate / Resolve.
+- **[IMPLEMENTED]** India detection map (pydeck + Carto dark) — colour by class or
+  severity, confirmed-incident overlay, tooltips.
+- **[IMPLEMENTED]** Tabs — Timeline (activity strip + calendar + period analysis +
+  playback), GIS Export (GeoJSON / CSV + preview), Classification (3 class panels +
+  land-cover / hazard tables), Incidents (30-incident table + 3 case studies),
+  Model (data sources, three-way evaluation, feature importance), Limitations
+  (5 caveats).
+
+### New IA + Agent
+
+- **[PLANNED]** `src/intelligence/` (`queries.py`, `actions.py`, `geo.py`,
+  `agent/`).
+- **[PLANNED]** `dashboard/` restructure: `theme.py`, `state.py`, `components/`,
+  `pages/`, `agent/panel.py`; `app.py` → shell + `st.navigation`.
+- **[PLANNED]** Command Center, Investigation, Map explorer, Analytics, Facilities,
+  Reports pages.
+- **[PLANNED]** Fire Intelligence Agent — deterministic offline runtime.
+- **[OPTIONAL/FUTURE]** Fire Intelligence Agent — Claude API runtime (activated
+  only when `ANTHROPIC_API_KEY` is set).
+- **[OPTIONAL/FUTURE]** Agent state-changing actions with confirmation gate.
+- **[NOT SUPPORTED]** Agent directly modifying `alerts.db` or any state; LLM
+  issuing raw SQL / arbitrary code; any "confirmed industrial fire" claim.
+
+### Existing features that must NOT be removed
+
+Severity / status / date / classification filters · alert pagination · alert
+detail / assessment · Acknowledge / Escalate / Resolve (manual) · lifecycle
+states · India detection map with zoom, markers, classification colours,
+incident overlay, facility layer, colour-by toggle, legend, tooltips · historical
+timeline · activity strip · calendar view · period analysis · playback · GIS
+export (GeoJSON + CSV) + preview · 3-class classification output + land-cover /
+hazard distributions · confirmed-incident scoring + case studies · Model
+transparency panel · Limitations panel · rule-based risk engine · global-training /
+India-holdout methodology and leakage checks.
+
+---
+
+## 4. Final feature set (after this round)
+
+| Section | Contents | Status |
+|---|---|---|
+| **Command Center** | Situation overview, KPI row, class + severity summaries, live India map, top-5 priority alerts, 14-day activity strip, quick actions, "View All Alerts" | PLANNED (reuses implemented pieces) |
+| **Alerts** | Full feed: filters, severity grouping, pagination, detail, manual Acknowledge/Escalate/Resolve, per-row "View Investigation" | IMPLEMENTED feed + PLANNED relocation |
+| **Investigation** | Incident header, Detection, Context, Why Flagged, Classification, Risk Assessment (factor breakdown), Recommended Action, manual actions | PLANNED |
+| **Map / GIS** | India detection map, all current layers/controls/interactions, click-to-investigate | IMPLEMENTED map + PLANNED page |
+| **Analytics** | Timeline + calendar + period analysis + playback; classification + severity analysis; baseline-vs-current FRP comparison | IMPLEMENTED + PLANNED baseline |
+| **Facilities** | Known industrial facilities with nearby detections: name, type, state, detection count, repeat count, max risk, historical activity, baseline where available | PLANNED (existing data) |
+| **Reports / GIS** | GeoJSON + CSV export (filter-aware) + preview; Markdown/CSV incident report | IMPLEMENTED export + PLANNED report |
+| **Model** | Real pipeline diagram, data sources, three-way evaluation, feature importance | IMPLEMENTED content + PLANNED page |
+| **Limitations** | FIRMS resolution, satellite revisit, land-cover, temporal/NRT-only, false positives, operational framing | IMPLEMENTED content + PLANNED page |
+| **Fire Intelligence Agent** | Command-palette panel: NL queries, analysis, filtering, navigation, map focus, open investigation, generate report — READ-ONLY | PLANNED (deterministic) + OPTIONAL (Claude) |
+
+---
+
+## 5. Final UI information architecture
+
+Navigation follows the operator workflow:
 
 ```
-/data/raw/            # untouched downloads (firms, vnf, gihs, facilities)
-/data/processed/      # cleaned/merged feature tables
-/data/incidents/       # manually-curated confirmed-incident CSV + matching results
-/src/ingestion/        # Stage 1-2 scripts
-/src/labeling/         # Stage 3 scripts
-/src/features/         # Stage 4 scripts
-/src/model/            # Stage 5-6: split, train, evaluate
-/src/scoring/          # Stage 7: incident scoring
-/dashboard/            # Stage 8
-/reports/              # accuracy tables, feature importance, figures for the pitch deck
+DETECT → CLASSIFY → VALIDATE → PRIORITIZE → EXPLAIN → ACT
 ```
+
+```
+Shell (system id · live clock · "⌘ Fire Intelligence")
+│
+├── Command Center      overview: what / how bad / where / what needs attention
+├── Alerts              full prioritised feed + filters + manual actions
+├── Investigation       why one alert matters + recommended action
+├── Map / GIS           where the thermal anomalies are
+├── Analytics           timeline, calendar, classification/severity, baseline
+├── Facilities          activity around known industrial infrastructure
+├── Reports / GIS        GeoJSON / CSV export + incident report
+├── Model               real pipeline + evaluation + feature importance
+└── Limitations         honest caveats
+```
+
+The Fire Intelligence Agent is a compact command palette available from the shell
+on every page — never a full-screen chatbot.
+
+---
+
+## 6. Data sources
+
+| Source | Role | Status |
+|---|---|---|
+| NASA FIRMS (MODIS 1 km, VIIRS 375 m) NRT | Primary thermal detections, India bbox | IMPLEMENTED (NRT only, last ~5 days) |
+| VIIRS Nightfire (VNF) global flare catalogue (ORNL DAAC) | Class A labelling oracle | IMPLEMENTED |
+| WRI Global Power Plant Database | Facility/context layer | IMPLEMENTED |
+| OpenStreetMap `landuse=industrial` (Overpass) | Facility/context layer | IMPLEMENTED |
+| Curated confirmed Indian incidents (news/Wikipedia) | Independent evaluation / demo set (30 rows) | IMPLEMENTED |
+| Simplified India state boundaries GeoJSON | Offline lat/lon → state resolver | PLANNED (bundled in `data/geo/`) |
+| GIHS (Global Industrial Heat Sources) | Additional Class A | NOT SUPPORTED yet (download URL unconfirmed) |
+| MODIS MCD12Q1 / ESA CCI Land Cover raster | Precise land-cover | NOT SUPPORTED yet (coordinate-zone heuristic used instead) |
+| Historical FIRMS archive (LAADS DAAC) | Temporal incident matching | NOT SUPPORTED yet |
+
+---
+
+## 7. Data / ML approach
+
+- **Global training, India held out.** The classifier learns physical/thermal
+  patterns from non-India data; India is a locked geographic holdout for
+  evaluation and deployment only. India data is still used for the facility/context
+  layer, the confirmed-incident set, and the deployed dashboard.
+- **No random split.** Splitting is by spatial grid / facility to avoid
+  repeated-detection leakage. Three accuracy figures are reported side by side
+  (random baseline, spatial holdout, India holdout).
+- **VNF is a labelling oracle, not a feature.** FIRMS rows within 5 km of a known
+  VNF flare site → Class A; remaining global FIRMS → `B_candidate`. All training
+  is in FIRMS feature space.
+- **Model.** RandomForestClassifier, 7 features: `bt_kelvin`, `frp_mw`,
+  `persistence_count`, `dist_nearest_facility_km`, `agri_season_flag`,
+  `day_night_bin`, `acq_month`. Feature importance is dominated by
+  `dist_nearest_facility_km` (0.29), `day_night_bin` (0.25), `bt_kelvin` (0.21).
+- **Anomaly rule.** `max(class probability) < 0.55` → Industrial Fire / Abnormal
+  Thermal Event. This is the actual product demo: real industrial incidents fall
+  outside both learned patterns.
+- **Risk engine is separate and rule-based** — transparent 0–100 additive score
+  (anomaly flag, FRP bands, persistence, facility proximity, classifier class,
+  FIRMS confidence, night flag, population proximity) → severity bands.
+
+### Hard constraints — do not violate
+
+- There is **no dataset of confirmed industrial fire incidents** anywhere. Do not
+  build or claim a classifier trained on confirmed industrial fire events.
+- A FIRMS hotspot is **not typed by cause**. Never treat a raw hotspot as a
+  labelled example.
+- "Near a facility" is a **weak context feature, never a label**.
+- **Never use a random train/test split** as the primary evaluation.
+- **Do not tune the model against the India holdout.**
+- The pitch/demo must **never claim "confirmed industrial fire detection."**
+  Locked framing: *"We detect anomalous departures from known persistent-industrial
+  and natural-fire patterns — not confirmed fires, because no training data for
+  that exists anywhere."*
+
+---
+
+## 8. Fire Intelligence Agent
+
+### Concept
+
+A natural-language operational intelligence layer over the fire detection and risk
+system — **not** an "AI chatbot for fire detection." The platform has two
+interaction modes over the *same* backend:
+
+- **Manual** — the conventional dashboard and controls.
+- **Agent** — ask questions / request views in natural language.
+
+The agent is an additional interface, never a replacement. It calls the same
+`src/intelligence/` service layer the manual UI uses.
+
+### Capabilities (this round — READ-ONLY)
+
+- Answer questions from actual application data ("critical industrial fire alerts
+  today", "persistent sources in Odisha last 7 days", "highest-risk incidents",
+  "compare Odisha and Jharkhand", "why was this classified as industrial fire",
+  "summarise eastern India").
+- Rank / filter / aggregate detections and alerts.
+- Apply filters to the shared UI state.
+- Navigate to a section.
+- Focus the existing map (no separate map).
+- Open an Investigation.
+- Generate a report via the existing report function.
+- Offer result cards: **Open Investigation**, **Show on Map**, **Generate Report**.
+
+### Limitations
+
+- **Read-only.** The agent never acknowledges, escalates, resolves, or otherwise
+  changes incident state. Such a request is explained and redirected to the manual
+  controls.
+- Answers only from real data. If a value is unavailable it says so — no
+  fabrication.
+- No free-text database access; the LLM never issues SQL or arbitrary code. It
+  can only call a fixed registry of read-only tools that map 1:1 to
+  `src/intelligence/` functions.
+
+### Offline-first requirement
+
+The deterministic keyword/intent parser (`src/intelligence/agent/deterministic.py`)
+is the **guaranteed baseline** and must handle every documented example prompt.
+The application — including the agent — must be fully functional with **no API
+key**.
+
+### Optional Claude API architecture
+
+If `ANTHROPIC_API_KEY` is present, `src/intelligence/agent/claude.py` provides a
+tool-use loop over the **same** read-only tool registry (model `claude-sonnet-5`).
+It is selected at runtime by `runtime.py`; its absence is not an error. `anthropic`
+is a guarded/optional import.
+
+---
+
+## 9. Technology stack
+
+- **Language:** Python 3.
+- **Frontend:** Streamlit (multipage via `st.navigation`), pydeck for the map,
+  Carto dark-matter basemap (no Mapbox token).
+- **Data:** pandas, pyarrow (Parquet), SQLite (`data/alerts.db`).
+- **ML:** scikit-learn (RandomForest, BallTree), joblib.
+- **Geo:** bundled simplified GeoJSON + pure-Python point-in-polygon (no new
+  geospatial dependency).
+- **Agent LLM (optional):** `anthropic` SDK — optional, guarded import.
+- **Config:** `python-dotenv`, `.env` (see `.env.example`).
+- No React, no FastAPI, no external database, no auth layer.
+
+---
+
+## 10. Repository structure
+
+```
+context.md  design_brief.md  architecture.md  workflow.md   ← project docs (this set)
+requirements.txt  .env.example  .gitignore
+
+data/
+  raw/                         # git-ignored downloads
+  processed/
+    facilities.parquet         # committed
+    stage6_india_scores.parquet# committed (705 scored India detections)
+  incidents/
+    confirmed_incidents_india.csv
+    stage7_incident_scores.parquet
+    match_summary.json
+  geo/                         # PLANNED — bundled india_states.geojson
+  alerts.db                    # git-ignored, auto-seeded on first run
+
+src/
+  ingestion/    # Stages 1–2: firms, vnf, facilities, gihs, config, utils, visualise
+  labeling/     # Stage 3: match_incidents
+  features/     # Stage 4: engineer
+  model/        # Stages 5–6: split, assemble, train
+  scoring/      # Stage 7: score_incidents
+  alerting/     # risk_engine, alert_store, pipeline
+  intelligence/ # PLANNED — queries, actions, geo, agent/{tools,deterministic,claude,runtime,response}
+
+dashboard/
+  app.py        # current single page → PLANNED shell + st.navigation
+  timeline.py
+  theme.py  state.py  components/  pages/  agent/panel.py   # PLANNED
+
+tests/          # test_ingestion, test_features, test_split (+ PLANNED intelligence/agent tests)
+reports/        # stage6_evaluation.txt, stage6_feature_importance.csv, stage7_incident_report.txt
+```
+
+---
+
+## 11. Important architectural decisions
+
+1. **Single service layer.** All data/logic lives in `src/intelligence/` (built on
+   the existing `src/alerting/` engines). The Streamlit layer is presentation
+   only. This makes a future React frontend a frontend-only project.
+2. **Stay in Streamlit for now.** Lower risk for the hackathon timeline; the
+   current aesthetic is kept.
+3. **Agent = fixed read-only tool registry.** The LLM (or the deterministic
+   parser) can only invoke named functions with typed arguments. No raw state
+   access.
+4. **Deterministic parser is primary, Claude is optional.** Offline-first.
+5. **Investigation is assembled, not stored.** It is a view over existing alert
+   fields; the only backend change is exposing the risk-score factor breakdown.
+6. **Offline geo.** State/region resolution uses a bundled GeoJSON + pure-Python
+   point-in-polygon — no new dependency, no network.
+7. **Preserve, relocate, don't rewrite.** Existing renderers and logic move into
+   modules; behaviour is unchanged.
+
+---
+
+## 12. Known limitations & risks
+
+- **FIRMS NRT only covers ~5 days.** No historical archive → confirmed-incident
+  temporal matching is 0/30; "historical" timeline depth is limited to what is in
+  `alerts.db`.
+- **Land-cover is a coordinate-zone heuristic**, not a raster.
+- **Class A training set is thin** (~1,901 FIRMS examples via VNF oracle); Class A
+  F1 ≈ 0.18 on spatial holdout.
+- **Trained model `.joblib` is not in the repo** — re-scoring new FIRMS data
+  requires re-running Stage 6 locally. The dashboard runs off committed scored
+  parquets + the rule-based risk engine.
+- **Alert volume is ~705 India detections**, not hundreds of thousands.
+- **State resolver accuracy** depends on the simplified GeoJSON; border cells may
+  be approximate.
+- **Streamlit reruns** — agent-applied UI state must go through the same
+  `session_state` path as manual filters to stay consistent.
+- **Optional Claude path** adds cost/latency/network dependency; must degrade to
+  deterministic cleanly.
+
+---
+
+## 13. Hackathon constraints & demo priorities
+
+- **Deadline:** internal hackathon 5 September.
+- **Must run offline** on a single machine with no API keys.
+- **Judge-facing clarity in ~10 seconds** on the Command Center.
+
+### Demo priorities (in order)
+
+1. Command Center reads instantly: active alerts, criticals, where, what to do.
+2. Alerts → Investigation flow: pick a critical alert, see *why* it was flagged
+   with real evidence and a recommended action.
+3. Map: classification-coloured detections over India, click a detection → its
+   investigation.
+4. Fire Intelligence Agent (offline): the §17 demo prompt — *"Find the three
+   highest-risk persistent thermal sources near industrial facilities in eastern
+   India over the last 7 days and explain why"* → three result cards with real
+   evidence + Open Investigation / Show on Map / Generate Report.
+5. Analytics baseline comparison and Facilities view as differentiators.
+6. Model + Limitations panels for technical credibility.
+
+---
+
+## 14. Future extensions (not in scope now)
+
+- Agent state-changing actions (Acknowledge / Escalate / Resolve) behind an
+  explicit confirmation gate.
+- Claude API runtime hardening and richer multi-step reasoning.
+- React + FastAPI frontend on top of the unchanged service layer.
+- Historical FIRMS archive ingestion → real temporal incident matching and deeper
+  timeline.
+- GIHS and land-cover raster integration → better Class A / Class B precision.
+- Notifications, multi-user, authentication.
+
+---
+
+## 15. Definition of "done" (this round)
+
+- Every existing feature is reachable in the new IA; nothing regressed.
+- No module under `dashboard/` imports `src.alerting` directly — only
+  `src.intelligence`.
+- `src/intelligence/` has unit tests; existing tests still pass.
+- Investigation shows only real evidence; no fabricated confidence or metrics.
+- Manual Acknowledge / Escalate / Resolve work exactly as before.
+- Fire Intelligence Agent answers every documented example prompt **with no API
+  key**, and its result cards drive the shared UI state.
+- With `ANTHROPIC_API_KEY` set, the Claude runtime is used and resolves the same
+  prompts through the same read-only tool layer.
+- The locked "not confirmed fire detection" framing appears wherever
+  classification is presented.
+- `context.md` Status Tracker updated; `git status` shows only intended files.
+
+---
 
 ## Status Tracker
 
-Update this section after each work session — what's done, what's blocked, what's next.
+Update after every work session — what's done, what's blocked, what's next.
 
-- [x] Stage 1 — Data ingestion (substantially complete; one minor blocker)
-  - **Done:** FIRMS NRT downloaded for India bbox (631 VIIRS + 66 MODIS rows, 2026-08-23 to 2026-08-27).
-  - **Done:** Global FIRMS NRT downloaded for 6 non-India training regions (sub-Saharan Africa 268k, South America 31k, West Africa 23k, Australia 8k, Central Asia 3k, SE Asia 729 rows; 335,807 total rows).
-  - **Done:** All FIRMS files tagged with `split` column at ingest time (India → `india_holdout`, global → `train_global`).
-  - **Done:** VNF (Global Gas Flare Survey, ORNL DAAC C2345877554-ORNL_CLOUD, 2012–2019) downloaded via Earthdata Bearer token. 83,641 rows. avg_temp mean 1,782 K (consistent with 1,500–2,000 K gas flare range). Split: 82,083 `train_global` / 1,558 `india_holdout` (coordinate-based, includes Pakistan/Bangladesh/Sri Lanka in bbox — conservative choice).
-  - **Done:** WRI Global Power Plant Database v1.3.0 downloaded (34,936 plants globally).
-  - **Done:** OSM industrial polygons fetched via Overpass API (37,688 India industrial features).
-  - **BLOCKED — GIHS:** Download URL unconfirmed. Open https://doi.org/10.1038/s41597-024-03461-3, locate Figshare/Zenodo link, add to `src/ingestion/gihs.py::_CANDIDATE_URLS`. Class A currently relies on VNF alone.
-  - **Note — Historical FIRMS:** NRT API only provides last 5 days. Historical data (months/years) requires LAADS DAAC HDF download or FIRMS bulk download portal — not yet implemented. Confirmed incident temporal matching is blocked on this.
+### Pipeline (unchanged this round)
 
-- [x] Stage 2 — Facility/context layer (done)
-  - Normalised facility table: `data/processed/facilities.parquet` (72,624 rows: 34,936 GPPD + 37,688 OSM; 39,277 India rows).
-  - Sanity-check map: `reports/facility_sanity_check.png`.
-  - Provenance metadata JSON written alongside all raw files.
+- [x] Stage 1 — Data ingestion (FIRMS NRT India + 6 global regions; VNF; GPPD; OSM). GIHS download URL still unconfirmed.
+- [x] Stage 2 — Facility/context layer → `data/processed/facilities.parquet` (72,624 rows).
+- [~] Stage 3 — Class A done (VNF); Class B still `B_candidate` (land-cover pending); 30 confirmed incidents curated; temporal FIRMS matching 0/30 (needs historical archive).
+- [x] Stage 4 — Feature engineering (`src/features/engineer.py`).
+- [x] Stage 5 — Assemble & spatial split (`src/model/assemble.py`, `src/model/split.py`).
+- [x] Stage 6 — RF trained global / India held out; scores committed (`stage6_india_scores.parquet`); `.joblib` git-ignored.
+- [x] Stage 7 — 30 incidents scored (21/30 anomaly-flagged) → `stage7_incident_scores.parquet`.
+- [x] Stage 8 — Single-file Streamlit dashboard (`dashboard/app.py`).
 
-- [~] Stage 3 — Label construction (Class A done; Class B partially; confirmed-incident set done)
-  - **Done — Class A:** VNF provides 82,083 global training rows tagged `label=A`. Pre-labelled by temperature+persistence (avg_temp ~1,500–2,000 K). DO NOT relabel.
-  - **Partial — Class B:** Global FIRMS NRT (335k rows, mostly natural fires in Africa/Amazon/SE Asia). Land-cover filtering needed to create defensible Class B labels. Not done yet.
-  - **Done — Confirmed incidents:** 30 curated incidents in `data/incidents/confirmed_incidents_india.csv`. VNF proximity check (within 20 km): 15/30 match known VNF flare sites; 15/30 don't (coal mines, agricultural sites, pharma — expected, VNF only captures gas-flare thermal signatures). Temporal FIRMS matching: 0/30 (incidents are 2019–2023, FIRMS NRT is current — requires historical archive).
-  - **BLOCKED — Class B labeling:** Requires land-cover data (e.g., MODIS MCD12Q1 or ESA CCI Land Cover) + persistence filtering. Not implemented yet.
-  - **BLOCKED — Temporal incident matching:** Need historical FIRMS archive for specific incident dates (2019–2023).
+### IA reorg + Fire Intelligence Agent (Session 5 — IMPLEMENTED)
 
-- [x] Stage 4 — Feature engineering (done)
-  - Feature table: `data/processed/features_stage4.parquet` — 419,448 rows, 25 columns.
-  - Schema: feature_id, lat, lon, spatial_grid_id, grid_key_1km, source_dataset, split, label, bt_kelvin, bt_11_kelvin, frp_mw, avg_temp_K, acq_date, acq_year, acq_month, day_night, persistence_count, persistence_pct, dist_nearest_facility_km, nearest_facility_type, nearest_facility_source, agri_season_flag, confidence, flr_type, flr_volume.
-  - **Class A (VNF):** 83,641 rows, mean bt_kelvin=1,783 K, 95.7% above 1,500 K. persistence_pct mean 21.6%.
-  - **Class B_candidate (FIRMS):** 335,102 rows, mean bt_kelvin=339 K, 0% above 1,500 K. persistence_count mean 2.9.
-  - **Holdout (no label):** 705 India FIRMS rows — correctly withheld.
-  - Leakage caught and fixed: 8 border-overlap rows (Central Asia/SE Asia bbox) retagged from train_global → india_holdout. `enforce_india_split()` guard added to firms.py.
-  - All leakage checks pass. 49 tests pass.
-  - NOTE: `B_candidate` label for FIRMS rows is pending land-cover validation (Stage 3b). Rows near VNF flare sites should be excluded from Class B before training.
+- [x] Part A — `src/intelligence/` service + tool layer (`queries.py`, `actions.py`, `geo.py`) + tests.
+- [x] Part A — `src/intelligence/agent/` (`tools`, `deterministic`, `claude`, `runtime`, `response`) — read-only registry (13 tools, none state-changing).
+- [x] Offline geo resolver — `geo.py` bbox+centroid method (no dependency); `data/geo/india_outline.json` bundled for map context.
+- [x] Part B — `dashboard/` restructure: `theme.py`, `state.py`, `data.py`, `shell.py`, `components/` (ui, mapview, charts, filterbar), `views/` (9 pages), `agent/panel.py`; `app.py` → shell + `st.navigation`.
+- [x] Command Center (KPIs, live map, priority alerts, donuts, activity timeline, recent detections, quick actions, docked agent).
+- [x] Alerts (filter bar, severity grouping, pagination, expander, manual Acknowledge/Escalate/Resolve, View Investigation).
+- [x] Investigation (assembled: header, detection, context, why-flagged, classification, risk-factor breakdown, recommended action, manual actions, focused map).
+- [x] Map Explorer · Analytics (timeline + baseline + class analysis) · Facilities (BallTree join, real names) · Reports/GIS (GeoJSON/CSV/incident report) · Model · Limitations.
+- [x] `src/alerting/risk_engine.py` — additive `factors` on `RiskResult` + `risk_factors` column + `explain_score()`. `alert_store.py` — `risk_factors` TEXT column (JSON).
+- [x] Agent — deterministic runtime (offline, no key); handles all documented §13/§17 prompts (35 new tests).
+- [x] Agent — optional Claude runtime (`src/intelligence/agent/claude.py`), guarded; silent fallback to deterministic.
+- [x] Robot: supplied `bb-8.glb` (76 MB) → textures resized + quantized → `dashboard/static/bb-8.glb` (1.9 MB); rendered via self-hosted `model-viewer.min.js` (offline).
+- [x] `requirements.txt` — `plotly` added; `anthropic>=0.40` added as an optional/guarded dependency.
+- [x] Tests: 49 existing + 35 new (`test_intelligence_geo/queries/actions.py`, `test_agent_deterministic.py`) = **84 passing**.
 
-- [x] Stage 5 — Assemble & split (done)
-  - **VNF labeling oracle approach:** VNF avg_temp (1,500–2,000 K spectral flame temp) is NOT the same physical quantity as FIRMS bright_ti4 (300–500 K pixel BT). Training on both as `bt_kelvin` would produce a model that always predicts B for India FIRMS data (India BT always in FIRMS range). Solution: VNF sites used as a spatial labeling oracle only — FIRMS global rows within 5 km of a known VNF flare site → label "A"; remaining FIRMS global → "B_candidate". VNF rows excluded from training.
-  - **FIRMS-space Class A examples:** 1,901 / 335,102 FIRMS global rows (0.57%) are within 5 km of a VNF site — labeled Class A. All in FIRMS feature space.
-  - **Splits (spatial grid 80/20):** train=270,238 (A=1,655, B=268,583) | val=64,864 (A=246, B=246) | india_holdout=705 (no label)
-  - **Leakage checks:** all pass. No India coordinates in training. No grid overlap between train/val.
-  - **Outputs:** `data/processed/stage5_{train,val,india_holdout,labeled,vnf_oracle}.parquet`
-  - **Script:** `src/model/assemble.py`
+**Run:** `python -m venv .venv && .venv/Scripts/pip install -r requirements.txt`
+then `.venv/Scripts/python -m streamlit run dashboard/app.py`. `data/alerts.db`
+auto-seeds on first launch. No API key needed.
 
-- [x] Stage 6 — Train & validate (done)
-  - **Model:** RandomForestClassifier, n_estimators=300, class_weight="balanced", n_jobs=-1.
-  - **Training features (7):** bt_kelvin, frp_mw, persistence_count, dist_nearest_facility_km, agri_season_flag, day_night_bin, acq_month. Median imputation for NaN.
-  - **Three-way evaluation:**
-    - Random-split baseline: 97.25% accuracy (Class A F1=0.24) — INFLATED
-    - Spatial holdout (honest): 98.06% accuracy (Class A F1=0.18) — honest geographic generalization
-    - Leakage gap: random better by 0.8 pp overall; Class A F1 drops from 0.24→0.18 (25% degradation when splitting spatially — real leakage signal in the minority class)
-    - India geographic holdout (705 rows, no labels): 309 predicted A, 396 predicted B, 59 anomaly-flagged (8.4%)
-  - **Feature importances:** dist_nearest_facility_km (29%), day_night_bin (25%), bt_kelvin (21%), persistence_count (14%), frp_mw (10%). agri_season_flag and acq_month both 0 (expected — FIRMS NRT is not from peak burning season).
-  - **Outputs:** `data/processed/stage6_model.joblib`, `stage6_india_scores.parquet`, `reports/stage6_evaluation.txt`, `reports/stage6_feature_importance.csv`
-  - **Script:** `src/model/train.py`
-  - **Known limitation:** Class A training set is thin (1,901 examples globally from VNF oracle). Class A F1=0.18 reflects this. Adding historical FIRMS archive or GIHS would significantly improve Class A recall.
+**Deferred (explicitly out of scope now):** agent-initiated Acknowledge /
+Escalate / Resolve; historical FIRMS archive; GIHS; land-cover raster; React
+frontend (service layer is already frontend-agnostic for it).
 
-- [x] Stage 7 — Incident scoring (done)
-  - Scored all 30 confirmed India incidents through the Stage 6 RF model.
-  - **21 / 30 incidents flagged as anomalies** (max_prob < 0.55, 70%) — correct outcome per design. Industrial fire incidents are transient anomalies that match neither the persistent gas flare pattern (Class A) nor natural fire (Class B).
-  - Thermal features (bt_kelvin, frp_mw, persistence_count, day_night_bin) = NaN for all incidents (historical FIRMS archive not downloaded). Imputed by pipeline medians. Classification driven by dist_nearest_facility_km + agri_season_flag + acq_month.
-  - Notable: Punjab/Haryana stubble burning (IND-009, IND-010) correctly NOT flagged as anomaly — predicted Class B, as expected.
-  - Outputs: `data/incidents/stage7_incident_scores.parquet`, `reports/stage7_incident_report.txt`
-  - Script: `src/scoring/score_incidents.py`
+**Known follow-ups:** `st.dialog` agent closes on submit (Command Center's docked
+agent is unaffected); Streamlit auto-collapses the nav sidebar below ~1000 px
+width.
 
-- [x] Stage 8 — Dashboard (done)
-  - Streamlit + pydeck map at `dashboard/app.py`.
-  - Run: `streamlit run dashboard/app.py`
-  - Features: India FIRMS hotspot map coloured by predicted class (orange=A, green=B, purple=anomaly), confirmed incident overlay (yellow), facility layer toggle, stats header, incident detail table, 3 case studies (Jharia coalfield / Punjab stubble / Vizag LG Polymers), limitations panel.
-  - No Mapbox token needed — uses free Carto dark-matter basemap.
-  - Screenshot: `dashboard/screenshot_full.png`
+### Session 6 — geographic-consistency fix
 
-**Last updated:** 2026-08-28 (Session 3)
+Root cause traced from source → intelligence → map: the FIRMS ingestion used a
+**rectangular** India bounding box (`lat 6–37, lon 68–97.5`) which also captures
+Sri Lanka, Pakistan, Tibet, Bangladesh, Myanmar. Of the 697 seeded detections,
+**only ~300 are actually inside an Indian state** (270 were Sri Lanka, ~91
+Pakistan, etc.). Separately, the display location was `nearest_city` from a
+hard-coded 30-city list, which produced impossible labels like
+"Chennai, Andhra Pradesh".
 
-**Architecture note (from new.txt):** Global training / India-held-out architecture is now enforced:
-- Every dataset carries a `split` column (`train_global` | `validation_global` | `india_holdout`) assigned at ingest.
-- `src/model/split.py` provides leakage-check assertions (31 tests, all passing).
-- Splits use spatial-grid grouping + coordinate-based India bounding box — no random split.
-- Anti-leakage checks verified on VNF and will be run at every subsequent pipeline stage.
-- **VNF feature space mismatch resolved in Stage 5:** VNF used as labeling oracle only; all training in FIRMS feature space.
+- [x] `src/intelligence/geo.py` **rewritten** — authoritative offline
+  point-in-polygon resolver over a bundled simplified admin GeoJSON
+  (`data/geo/india_admin.geojson`, 1.2 MB: 36 dissolved state polygons + 760
+  district polygons; pure-Python ray-casting; per-feature bbox pre-filter; 0.03°
+  boundary tolerance for polygon-simplification + FIRMS-pixel error).
+  `resolve(lat,lon) -> {state, district, in_india, zone}`. Bengaluru→Karnataka,
+  Paradip→Odisha, Dhanbad→Jharkhand, etc. all correct; foreign points →
+  `in_india=False` + a coarse `zone` ("Sri Lanka", "Bay of Bengal", …).
+- [x] `queries.py` — every alert annotated with `state / district / in_india /
+  zone / place`; **the product scope is now India-only** (`_alerts()` filters
+  `in_india`); `place` = `"District, State"` (never a city→state inference);
+  `outside_india_alerts()` + `geo_audit()` added; daily/analytics recomputed
+  from the India set.
+- [x] Coordinates are **never transformed, swapped, or clipped** — `geo` only
+  *classifies* points; outside-India detections keep their true lat/lon and are
+  shown on the map as an explicit, dim, opt-in "Regional context (outside India)"
+  layer (Map Explorer), plus counted in the **Data validation** expander
+  (plotted / in-India / outside / outside-bbox / lat-lon ranges / per-region
+  breakdown / samples).
+- [x] Map: CARTO dark basemap restored (`map_provider="carto"`, `map_style="dark"`,
+  no Mapbox token) so surrounding countries stay visible; the bundled India
+  outline is now a thin border, not a fill.
+- [x] Incidents keep their **curated** `state` (human-verified); 28/30 match
+  point-in-polygon, 2 are a near-border coordinate and an offshore platform —
+  left as curated.
+- [x] Tests: +14 (`test_intelligence_geo.py` rewritten with the required
+  known-location checks + no-lat/lon-swap + audit; `test_intelligence_queries.py`
+  India-scope + label-consistency + audit). **98 passing.**
+- [x] Build-time only: `shapely` used to dissolve/simplify the district GeoJSON
+  (script in scratch, not a runtime dependency).
 
-**Current blockers:**
-1. **GIHS download URL** — manually check https://doi.org/10.1038/s41597-024-03461-3 → add to `src/ingestion/gihs.py::_CANDIDATE_URLS`
-2. **Class B land-cover filtering** — needs land-cover raster or API (MODIS MCD12Q1 recommended). Currently all non-VNF-adjacent FIRMS global rows are B_candidate.
-3. **Historical FIRMS archive** — for temporal incident matching in Stage 7; needs LAADS DAAC HDF workflow or FIRMS bulk download
+**Numbers changed:** active alerts 697 → ~300 (the ~397 non-India FIRMS points
+are excluded from the product but retained and viewable).
 
-**What to do next (no human action needed — all implementable):**
-- Stage 7: Score the 30 confirmed India incidents through the model (lat/lon known, need FIRMS features from archive or approximate from nearest NRT detection).
-- Stage 8: Streamlit dashboard — map of India holdout FIRMS scores colour-coded by predicted class + anomaly flag.
+### Session 7 — Fire Intelligence Agent UI revision (presentation only)
+
+Interaction/presentation refinement of the agent panel. **No change** to the
+agent architecture, the intelligence layer, the read-only tool set, the GLB
+asset, or any other view.
+
+- [x] **Idle robot is completely static.** Removed `auto-rotate` /
+  `rotation-per-second` / `camera-controls` from `<model-viewer>`; the GLB is
+  `pause()`d on load so any embedded clip is frozen. Hover = a subtle
+  scale + brightness response only.
+- [x] **Explicit visual states** (`dashboard/agent/panel.py`):
+  `IDLE` (collapsed, static) → `OPEN` (expanded, static) → `THINKING/ANSWERING`
+  (a restrained CSS "scan" sweep + inset glow + `ANALYSING` tag drawn *around*
+  the static robot, plus an in-conversation spinner) → back to `OPEN/IDLE`.
+  Driven by `st.session_state["agent_pending"]`: the busy overlay is a plain
+  CSS element Python renders only while a query is in flight, and the rerun
+  after the reply lands clears it — motion can never outlive the response.
+  `_THINK_FLOOR_S = 0.85` keeps the state legible when the offline parser
+  answers instantly.
+- [x] **Click-to-expand, in place.** Docked panel (`scope="dock"`) collapses to
+  a compact card — robot + `ONLINE` + one line ("Ask about alerts, risks,
+  regions or facilities.") — and expands to robot-on-top + `Conversation`
+  below, in the same card, via an `Open console ▸ / Collapse ▾` control. The
+  sidebar dialog (`scope="dialog"`, `collapsible=False`) is always expanded.
+- [x] **Styling aligned to the dashboard.** Dropped the bright-purple chat
+  bubbles: user turns are a subtle `panel2` surface with a thin accent-blue
+  right border, bot turns a plain bordered panel; 6px radii; `IBM Plex Mono`
+  section labels; result cards get a thin accent-blue left rule. `AGENT` purple
+  is no longer used in the agent surface.
+- [x] Command Center wraps the panel in `st.container(border=True)` instead of
+  the old (non-wrapping) `<div class="agent-wrap">` markup.
+- [x] Tests unchanged — **98 passing** (agent logic untouched).
+
+**Last updated:** 2026-09-01 (Session 7 — Fire Intelligence Agent UI revision).
