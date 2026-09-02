@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "fire-intelligence",
+      "runtimeExecutable": ".venv/Scripts/python",
+      "runtimeArgs": ["-m", "streamlit", "run", "dashboard/app.py",
+                      "--server.port", "8501", "--server.headless", "true"],
+      "port": 8501
+    }
+  ]
+}
