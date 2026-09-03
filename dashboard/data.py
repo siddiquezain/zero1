@@ -145,6 +145,32 @@ def events_situation(_sig: float) -> dict:
     return queries.events_situation()
 
 
+# ── facility thermal fingerprinting ─────────────────────────────────────────
+@st.cache_data(ttl=60, show_spinner=False)
+def event_deviation(_sig: float, event_id: str) -> dict | None:
+    return queries.get_event_deviation(event_id)
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def facility_fingerprint(_sig: float, facility_id: str) -> dict | None:
+    return queries.get_facility_fingerprint(facility_id)
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def facility_deviation_rank(_sig: float, limit: int) -> list[dict]:
+    return queries.rank_facilities_by_deviation(limit=limit)
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def abnormal_facilities(_sig: float, limit: int) -> list[dict]:
+    return queries.find_abnormal_facilities(limit=limit)
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def fingerprint_summary(_sig: float) -> dict:
+    return queries.facility_fingerprint_summary()
+
+
 def EVENTS(filters=None, sort_by="risk_score", limit=500):
     return events(_sig(), filters, sort_by, limit)
 def EVENT(event_id: str):             return event(_sig(), event_id)
@@ -154,6 +180,11 @@ def EVENT_EV(event_id: str):          return event_evidence(_sig(), event_id)
 def EVENT_EVO(event_id: str):         return event_evolution(_sig(), event_id)
 def EVENT_TRAJ(event_id: str):        return event_trajectory(_sig(), event_id)
 def EVENTS_SIT():                     return events_situation(_sig())
+def EVENT_DEV(event_id: str):         return event_deviation(_sig(), event_id)
+def FACILITY_FP(facility_id: str):    return facility_fingerprint(_sig(), facility_id)
+def FACILITY_DEV_RANK(limit=15):     return facility_deviation_rank(_sig(), limit)
+def ABNORMAL_FACILITIES(limit=15):   return abnormal_facilities(_sig(), limit)
+def FP_SUMMARY():                     return fingerprint_summary(_sig())
 
 
 # ── mutations (manual UI only) ─────────────────────────────────────────────

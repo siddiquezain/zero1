@@ -35,7 +35,12 @@ def _deterministic(message: str, context: dict | None) -> AgentReply:
     except Exception as e:  # noqa: BLE001 — never crash the panel
         return AgentReply(text=f"Query failed: {e}", mode="deterministic",
                           tool=interp.tool)
-    return response.build(interp, result, mode="deterministic")
+    try:
+        return response.build(interp, result, mode="deterministic")
+    except Exception:  # noqa: BLE001 — formatting must never crash the panel either
+        return AgentReply(text="I ran that query but couldn't format the answer. "
+                               "Try opening the matching page from the sidebar.",
+                          data=result, mode="deterministic", tool=interp.tool)
 
 
 def claude_available() -> bool:

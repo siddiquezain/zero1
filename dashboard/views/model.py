@@ -78,3 +78,16 @@ def render() -> None:
         'Bands: ≥65 CRITICAL · ≥40 HIGH · ≥20 MEDIUM · &lt;20 LOW. '
         'The Investigation view shows exactly which components fired for each alert.</div>',
         unsafe_allow_html=True)
+
+    ui.section("Three separate scores — not one number")
+    st.markdown(
+        f'<div class="panel mini" style="line-height:1.9">'
+        '<b>Model class probability</b> — the Random Forest\'s confidence (prob_A / '
+        'prob_B_candidate).<br>'
+        '<b>Risk score</b> — the additive rule above; operational priority.<br>'
+        '<b>Thermal deviation</b> — how far an event departs from its facility\'s own '
+        'observed baseline (src/intelligence/facility_fingerprint.py; 0–100, '
+        'NORMAL / ELEVATED / ABNORMAL / HIGHLY_ABNORMAL). Deterministic, baseline-relative, '
+        'not machine-learned, and deliberately <b>not</b> folded into the risk score. '
+        'INSUFFICIENT_BASELINE for facilities without enough history.</div>',
+        unsafe_allow_html=True)

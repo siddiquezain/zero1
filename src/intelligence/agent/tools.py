@@ -164,6 +164,43 @@ _reg(Tool("events_situation",
           lambda: queries.events_situation(), {}))
 
 
+# ── facility thermal fingerprinting (read-only) ─────────────────────────────
+_reg(Tool("get_facility_fingerprint",
+          "Facility thermal baseline: typical FRP / brightness temperature / "
+          "persistence / day-night profile over the observed window, or "
+          "INSUFFICIENT_BASELINE when history is too thin.",
+          lambda facility_id, exclude_event_id=None:
+              queries.get_facility_fingerprint(facility_id, exclude_event_id),
+          {"facility_id": {"type": "string"},
+           "exclude_event_id": {"type": "string"}}))
+
+_reg(Tool("get_event_deviation",
+          "How far a thermal event departs from its nearest facility's baseline: "
+          "thermal_deviation_score (0-100), level (NORMAL / ELEVATED / ABNORMAL / "
+          "HIGHLY_ABNORMAL), and deterministic evidence. Separate from risk_score "
+          "and model probability.",
+          lambda event_id: queries.get_event_deviation(event_id),
+          {"event_id": {"type": "string"}}))
+
+_reg(Tool("rank_facilities_by_deviation",
+          "Facilities ranked by the deviation of their most unusual current event "
+          "vs their own thermal baseline.",
+          lambda limit=10: queries.rank_facilities_by_deviation(limit=limit),
+          {"limit": {"type": "integer"}}))
+
+_reg(Tool("find_abnormal_facilities",
+          "Facilities whose current thermal behaviour is ABNORMAL or "
+          "HIGHLY_ABNORMAL vs their baseline.",
+          lambda limit=10, min_level="ABNORMAL":
+              queries.find_abnormal_facilities(limit=limit, min_level=min_level),
+          {"limit": {"type": "integer"}, "min_level": {"type": "string"}}))
+
+_reg(Tool("facility_fingerprint_summary",
+          "Counts: facilities with activity, baselines available, insufficient "
+          "baselines, events assessed, abnormal events, by-level breakdown.",
+          lambda: queries.facility_fingerprint_summary(), {}))
+
+
 READ_ONLY_TOOL_NAMES = tuple(REGISTRY.keys())
 
 

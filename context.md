@@ -633,4 +633,54 @@ Implemented across 11 commits (Tasks 1–11 of `docs/superpowers/plans/2026-09-0
 
 **Test count:** 161 passing, 0 failing.
 
-**Last updated:** 2026-09-03 (Session 10 — Thermal Event Intelligence Platform complete)
+### Session 11 — Facility Thermal Fingerprinting (additive)
+
+A facility-level behavioural baseline + current-event deviation score. Additive:
+no existing module removed, no schema migration, no model retraining, no UI
+redesign, RF predictions / risk_score / severity thresholds unchanged.
+
+- **NEW** `src/intelligence/facility_fingerprint.py` — pure/deterministic, no
+  Streamlit/LLM. `build_facility_baseline(facility, observations)` → robust stats
+  (median / IQR / MAD via `statistics`) for FRP, brightness temperature,
+  persistence, day-night ratio, active months over detections within
+  `ASSOC_RADIUS_KM` (10 km). Gate: ≥6 obs across ≥2 days, else
+  `baseline_quality = INSUFFICIENT_BASELINE` (no invented fields).
+  `compare_event_to_baseline(event, baseline)` → per-signal 0–100 deviations
+  (intensity / brightness / persistence / day_night / seasonal), combined by
+  configurable `SIGNAL_WEIGHTS` → `thermal_deviation_score` (0–100),
+  `thermal_deviation_level` (NORMAL / ELEVATED / ABNORMAL / HIGHLY_ABNORMAL),
+  `thermal_behavior_class` (NORMAL / ABNORMAL / INSUFFICIENT_BASELINE), plus
+  deterministic `evidence[]` strings citing real numbers.
+- **queries.py** — `_facility_index()` (single shared BallTree — `facilities_with_activity`
+  refactored onto it, no second matcher), `get_facility_fingerprint`,
+  `get_event_deviation`, `get_alert_deviation`, `rank_facilities_by_deviation`,
+  `find_abnormal_facilities`, `facility_fingerprint_summary`; `facilities_with_activity`
+  rows gain `baseline_quality` / `deviation_level` / `deviation_score`;
+  `clear_caches()` extended.
+- **risk_engine.py** — `deviation_factor(score)` helper only. NOT called by
+  `score_row` (row-level, pre-event); deviation stays a separate signal per the
+  "three distinct scores" rule. `risk_score` / severity / thresholds unchanged.
+- **agent** — 5 read-only tools (`get_facility_fingerprint`, `get_event_deviation`,
+  `rank_facilities_by_deviation`, `find_abnormal_facilities`,
+  `facility_fingerprint_summary`) + deterministic intents + response formatting.
+  Also fixed a pre-existing crash: the Session-10 event intents had no
+  `response.py` handlers, so `runtime.ask("show me thermal events")` raised
+  `KeyError: 'frp_mw'` — added handlers + a `response.build` try/except so the
+  panel never crashes.
+- **UI (no redesign)** — Investigation: `_render_facility_deviation` panel after
+  the event panels. Facilities: 2 table columns + baseline block in "Focus a
+  facility". Analytics: one "Facility thermal baselines" section. Model +
+  Limitations: one honest note each.
+- **NEW** `tests/test_facility_fingerprint.py` — 25 tests (16 required scenarios +
+  regression guards).
+
+**Honest limitation:** the FIRMS NRT window is ~5 days. Of 133 facilities with a
+nearby detection, ~5 have enough history for a baseline; the rest are
+`INSUFFICIENT_BASELINE`. Where a baseline exists it is a short-window profile,
+and for single-burst facilities it includes the scored event's own detections
+(`baseline_overlap.dominated`). No `ABNORMAL` facilities in the current snapshot —
+reported honestly rather than inflated.
+
+**Test count:** 186 passing, 0 failing (161 + 25).
+
+**Last updated:** 2026-09-03 (Session 11 — Facility Thermal Fingerprinting complete)

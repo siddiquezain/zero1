@@ -29,13 +29,20 @@ def render() -> None:
         "Facility": f["name"],
         "Type": f["hazard_type"],
         "State": f.get("state") or "—",
-        "Source": f["source"],
         "Nearby": f["nearby_detections"],
         "Repeat": f["repeat_detections"],
         "Max risk": f["max_risk"],
+        "Baseline": f.get("baseline_quality", "—"),
+        "Deviation": (f'{f["deviation_score"]}/100 · {f["deviation_level"]}'
+                      if f.get("deviation_score") is not None else f.get("deviation_level", "—")),
         "Nearest (km)": f["min_distance_km"],
     } for f in facs])
     st.dataframe(df, hide_index=True, use_container_width=True, height=430)
+    st.markdown(
+        f'<div class="mini" style="color:{T.T2};margin-top:2px">Baseline = the '
+        f'facility\'s own observed thermal profile (INSUFFICIENT_BASELINE when history '
+        f'is too thin — the FIRMS NRT window is ~5 days). Deviation is a behavioural '
+        f'signal, separate from the risk score.</div>', unsafe_allow_html=True)
 
     ui.section("Focus a facility")
     names = [f["name"] for f in facs[:40]]
@@ -50,6 +57,31 @@ def render() -> None:
         st.markdown(f'<div class="mini">Classes nearby: '
                     + " · ".join(f'{k} {v}' for k, v in fac["classes"].items())
                     + '</div>', unsafe_allow_html=True)
+
+        fp = data.FACILITY_FP(fac["facility_id"])
+        if fp:
+            ui.section("Thermal baseline", "the facility's own observed profile")
+            if fp.get("baseline_quality") == "INSUFFICIENT_BASELINE":
+                ui.empty_state(
+                    "Insufficient history for a baseline.",
+                    (fp.get("notes") or [""])[0]
+                    or "Needs ≥6 detections across ≥2 days within 10 km.")
+            else:
+                frp = fp.get("frp") or {}
+                bt = fp.get("bt") or {}
+                bc = st.columns(4)
+                bc[0].metric("Typical peak FRP",
+                             f'{frp.get("median")} MW' if frp else "—")
+                bc[1].metric("Typical brightness",
+                             f'{bt.get("median")} K' if bt else "—")
+                bc[2].metric("Typical persistence", fp.get("median_persistence") or "—")
+                bc[3].metric("Typical timing", fp.get("typical_day_night") or "—")
+                st.markdown(
+                    f'<div class="mini" style="color:{T.T2}">Window '
+                    f'{fp.get("baseline_start")} → {fp.get("baseline_end")} · '
+                    f'{fp.get("observation_count")} obs / {fp.get("active_days")} days · '
+                    f'quality {fp.get("baseline_quality")}. Short-window profile — not a '
+                    f'long-run archive.</div>', unsafe_allow_html=True)
         if st.button("Show this area on the map  →", key="fac_tomap"):
             state.set_filters({"state": [fac["state"]] if fac.get("state") else [],
                                "max_dist_facility_km": float(radius)})

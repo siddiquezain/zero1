@@ -31,6 +31,15 @@ _FP_COLORS = {
     "UNKNOWN": T.T2,
 }
 
+_DEV_COLORS = {
+    "HIGHLY_ABNORMAL": T.CRIT,
+    "ABNORMAL": "#f97316",
+    "ELEVATED": T.MED,
+    "NORMAL": T.LOW,
+    "INSUFFICIENT_BASELINE": T.T2,
+    "NO_FACILITY": T.T2,
+}
+
 
 def _kv(rows: list[tuple[str, str]]) -> None:
     body = "".join(
@@ -206,6 +215,75 @@ def _render_trajectory(traj: dict) -> None:
     )
 
 
+def _render_facility_deviation(dev: dict) -> None:
+    ui.section("Facility Thermal Baseline",
+               "how this event compares with the site's own observed activity")
+    lvl = dev.get("thermal_deviation_level", "INSUFFICIENT_BASELINE")
+    score = dev.get("thermal_deviation_score")
+    color = _DEV_COLORS.get(lvl, T.T2)
+    b = dev.get("baseline") or {}
+
+    if score is None:
+        msg = dev.get("note") or (b.get("notes") or ["Insufficient facility history."])[0]
+        st.markdown(
+            f'<div class="panel"><div class="mini" style="line-height:1.7">{msg}</div>'
+            f'<div style="font-size:10px;color:{T.T2};margin-top:6px;line-height:1.6">'
+            f'A baseline needs ≥6 detections across ≥2 days within 10 km of a known '
+            f'facility. The FIRMS NRT feed is only ~5 days, so most facilities do not '
+            f'yet have one. Shown honestly rather than fabricated.</div></div>',
+            unsafe_allow_html=True)
+        return
+
+    frp = b.get("frp") or {}
+    bt = b.get("bt") or {}
+    ov = dev.get("baseline_overlap") or {}
+    rows = [
+        ("Facility", f'{b.get("facility_name") or "—"} '
+                     f'({dev.get("dist_facility_km", "?")} km)'),
+        ("Baseline window", f'{b.get("baseline_start", "?")} → {b.get("baseline_end", "?")} '
+                            f'· {b.get("observation_count", 0)} obs / {b.get("active_days", 0)} d'),
+        ("Baseline quality", b.get("baseline_quality", "—")),
+        ("Typical peak FRP", f'{frp.get("median")} MW  (IQR {frp.get("iqr")})'
+                             if frp else "not available"),
+        ("Typical brightness", f'{bt.get("median")} K' if bt else "not available"),
+        ("Typical persistence", str(b.get("median_persistence") or "—")),
+        ("Typical timing", b.get("typical_day_night") or "—"),
+    ]
+    kv_html = "".join(
+        f'<div style="display:flex;justify-content:space-between;padding:5px 0;'
+        f'border-bottom:1px solid {T.BORDER}"><span style="color:{T.T1};font-size:11px">{k}</span>'
+        f'<span style="font-family:var(--mono);font-size:11px;color:{T.T0};text-align:right">{v}</span></div>'
+        for k, v in rows
+    )
+    ev_html = "".join(
+        f'<div style="padding:4px 0;font-size:11px"><span style="color:{color}">›</span> {e}</div>'
+        for e in dev.get("evidence", [])
+    ) or f'<div style="font-size:11px;color:{T.T2}">No material deviations from the baseline.</div>'
+
+    st.markdown(
+        f'<div class="panel">'
+        f'<div style="display:flex;justify-content:space-between;align-items:flex-start">'
+        f'<div style="flex:1">{kv_html}</div>'
+        f'<div style="text-align:right;padding-left:14px;min-width:96px">'
+        f'<div style="font-size:28px;font-weight:700;font-family:var(--mono);color:{color};line-height:1">'
+        f'{score}<span style="font-size:12px;color:{T.T2}">/100</span></div>'
+        f'<div style="font-size:9px;letter-spacing:.1em;color:{T.T2};margin-top:2px">THERMAL DEVIATION</div>'
+        f'<div style="font-size:11px;font-weight:700;color:{color};margin-top:4px">{lvl}</div></div>'
+        f'</div>'
+        f'<div style="margin-top:8px;padding-top:8px;border-top:1px solid {T.BORDER_2}">{ev_html}</div>'
+        f'<div style="font-size:11px;color:{T.T1};line-height:1.6;margin-top:6px">'
+        f'{dev.get("interpretation", "")}</div>'
+        f'<div style="font-size:10px;color:{T.T2};line-height:1.6;margin-top:6px">'
+        f'Behavioural deviation from the facility\'s own baseline — <b>not</b> part of '
+        f'the risk score above, and separate from the model class probability. '
+        + ('Baseline includes this event\'s own detections (a longer archive would '
+           'give an independent comparison). ' if ov.get("dominated") else '')
+        + 'An abnormal thermal event is not a confirmed fire.</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+
 def render() -> None:
     topbar("Investigation")
     aid = st.session_state.get("focus_alert_id")
@@ -371,6 +449,10 @@ def render() -> None:
         traj = data.EVENT_TRAJ(event_id)
         if traj and traj.get("state") != "INSUFFICIENT DATA":
             _render_trajectory(traj)
+
+        dev = data.EVENT_DEV(event_id)
+        if dev:
+            _render_facility_deviation(dev)
 
     # ── Recommended action + manual controls ──────────────────────────────
     st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)

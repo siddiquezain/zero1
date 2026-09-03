@@ -241,6 +241,11 @@ def parse(message: str, context: dict | None = None) -> Interpretation:
             return Interpretation(understood=True, tool="get_event_fingerprint",
                                   args={"event_id": _eid}, intent="event_fingerprint",
                                   message=f"Fetching behaviour fingerprint for event {_eid}.")
+        if any(kw in text for kw in ("deviation", "deviate", "baseline", "unusual",
+                                     "abnormal", "vs normal", "compared to normal")):
+            return Interpretation(understood=True, tool="get_event_deviation",
+                                  args={"event_id": _eid}, intent="event_deviation",
+                                  message=f"Comparing event {_eid} with its facility baseline.")
         if any(kw in text for kw in ("evidence", "why", "reason", "because", "support")):
             return Interpretation(understood=True, tool="get_event_evidence",
                                   args={"event_id": _eid}, intent="event_evidence",
@@ -343,6 +348,24 @@ def parse(message: str, context: dict | None = None) -> Interpretation:
         I.filters = _build_filters(text)
         I.args = {"filters": I.filters}
         I.nav = "Reports"
+        return I
+
+    # --- facility thermal fingerprinting (baseline / deviation) ---
+    if "facilit" in text and re.search(
+            r"\babnormal\b|deviat|\bunusual\b|behaving", text):
+        if re.search(r"\brank\b|\bsort\b|\border\b|by deviat|highest deviat", text):
+            I.intent = "rank_facility_deviation"
+            I.tool = "rank_facilities_by_deviation"
+        else:
+            I.intent = "abnormal_facilities"
+            I.tool = "find_abnormal_facilities"
+        I.args = {"limit": lim or 10}
+        I.nav = "Facilities"
+        return I
+    if "facilit" in text and re.search(r"\bbaseline\b|\bfingerprint\b|\bthermal profile\b", text):
+        I.intent = "fp_summary"
+        I.tool = "facility_fingerprint_summary"
+        I.nav = "Analytics"
         return I
 
     # --- facilities (subject is the facilities themselves) ---

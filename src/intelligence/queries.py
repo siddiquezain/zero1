@@ -32,6 +32,7 @@ from pathlib import Path
 import pandas as pd
 
 from src.alerting import alert_store, risk_engine
+from src.intelligence import facility_fingerprint as _ff
 from src.intelligence import geo
 
 _ROOT = Path(__file__).resolve().parents[2]
@@ -615,22 +616,55 @@ def _india_facilities() -> pd.DataFrame:
     return f
 
 
+@lru_cache(maxsize=1)
+def _facility_index():
+    """(BallTree over India facilities, facilities DataFrame). The single
+    facility-association implementation — every caller that needs a
+    detection→facility match reuses this, never builds its own tree."""
+    from sklearn.neighbors import BallTree
+    import numpy as np
+    fac = _india_facilities()
+    tree = BallTree(np.radians(fac[["lat", "lon"]].values), metric="haversine")
+    return tree, fac
+
+
+def _facility_record(idx: int) -> dict:
+    _, fac = _facility_index()
+    r = fac.iloc[int(idx)]
+    name = r.get("name")
+    return {
+        "facility_id": str(r["facility_id"]),
+        "name": name if isinstance(name, str) and name else "(unnamed site)",
+        "facility_type": str(r["facility_type"]),
+        "hazard_type": risk_engine.classify_hazard_type(str(r["facility_type"])),
+        "source": str(r["source"]),
+        "lat": float(r["lat"]), "lon": float(r["lon"]),
+        "state": geo.state_for_point(float(r["lat"]), float(r["lon"])),
+    }
+
+
+def _facility_by_id(facility_id: str) -> dict | None:
+    _, fac = _facility_index()
+    hits = fac.index[fac["facility_id"].astype(str) == str(facility_id)]
+    return _facility_record(int(hits[0])) if len(hits) else None
+
+
 def facilities_with_activity(filters: dict | None = None, limit: int = 60,
                              radius_km: float = 10.0) -> list[dict]:
     alerts = _apply_filters(_alerts(), filters)
     if alerts.empty:
         return []
-    fac = _india_facilities()
     try:
-        from sklearn.neighbors import BallTree
         import numpy as np
-        tree = BallTree(np.radians(fac[["lat", "lon"]].values), metric="haversine")
+        tree, fac = _facility_index()
         q = np.radians(alerts[["lat", "lon"]].values)
         dist_rad, idx = tree.query(q, k=1)
         dist_km = dist_rad[:, 0] * 6371.0
         fac_idx = idx[:, 0]
     except Exception:
         return []
+    fps = _facility_fingerprints_cached(db_signature())
+    devs = _facility_deviations_cached(db_signature())
 
     alerts = alerts.reset_index(drop=True)
     rows = []
@@ -647,28 +681,214 @@ def facilities_with_activity(filters: dict | None = None, limit: int = 60,
 
     out = []
     for fi, items in groups.items():
-        frow = fac.iloc[fi]
+        frec = _facility_record(fi)
         a_rows = [a for _, a in items]
         risks = [int(a["risk_score"]) for a in a_rows]
         classes = pd.Series([a["output_class_short"] for a in a_rows]).value_counts().to_dict()
         repeat = sum(1 for a in a_rows if int(a.get("persistence_count") or 1) >= 2)
+        fp = fps.get(frec["facility_id"]) or {}
+        dev = devs.get(frec["facility_id"]) or {}
         out.append({
-            "facility_id": str(frow["facility_id"]),
-            "name": (frow.get("name") if isinstance(frow.get("name"), str)
-                     and frow.get("name") else "(unnamed site)"),
-            "facility_type": frow["facility_type"],
-            "hazard_type": risk_engine.classify_hazard_type(str(frow["facility_type"])),
-            "source": frow["source"],
-            "lat": float(frow["lat"]), "lon": float(frow["lon"]),
-            "state": geo.state_for_point(frow["lat"], frow["lon"]),
+            **frec,
             "nearby_detections": len(a_rows),
             "repeat_detections": repeat,
             "max_risk": max(risks) if risks else 0,
             "classes": classes,
             "min_distance_km": round(min(d for d, _ in items), 2),
+            # additive thermal-fingerprint context (safe defaults when unavailable)
+            "baseline_quality": fp.get("baseline_quality", "INSUFFICIENT_BASELINE"),
+            "deviation_level": dev.get("thermal_deviation_level", "INSUFFICIENT_BASELINE"),
+            "deviation_score": dev.get("thermal_deviation_score"),
         })
     out.sort(key=lambda r: (r["max_risk"], r["nearby_detections"]), reverse=True)
     return out[:limit]
+
+
+# ── public: facility thermal fingerprinting ─────────────────────────────────
+def _alerts_near_facility(flat: float, flon: float,
+                          radius_km: float = _ff.ASSOC_RADIUS_KM,
+                          exclude_ids: tuple = ()) -> list[dict]:
+    """India detections within `radius_km` of a point (haversine), as alert dicts.
+    `exclude_ids` drops an event's own detections for a leave-one-out baseline."""
+    df = _alerts()
+    if df.empty:
+        return []
+    import numpy as np
+    la = np.radians(df["lat"].to_numpy(dtype=float))
+    lo = np.radians(df["lon"].to_numpy(dtype=float))
+    fla, flo = np.radians(flat), np.radians(flon)
+    d = 2 * 6371.0 * np.arcsin(np.sqrt(np.clip(
+        np.sin((la - fla) / 2) ** 2
+        + np.cos(fla) * np.cos(la) * np.sin((lo - flo) / 2) ** 2, 0, 1)))
+    sub = df[d <= radius_km]
+    if exclude_ids:
+        sub = sub[~sub["alert_id"].isin(set(exclude_ids))]
+    return [_row_to_alert(r) for _, r in sub.iterrows()]
+
+
+@lru_cache(maxsize=4)
+def _facility_fingerprints_cached(_sig: float) -> dict:
+    """facility_id -> baseline dict, for every India facility that has >=1
+    detection within the association radius."""
+    df = _alerts()
+    if df.empty:
+        return {}
+    import numpy as np
+    tree, _fac = _facility_index()
+    dist_rad, idx = tree.query(np.radians(df[["lat", "lon"]].to_numpy(dtype=float)), k=1)
+    dist_km = dist_rad[:, 0] * 6371.0
+    fac_idx = idx[:, 0]
+    rows = [_row_to_alert(r) for _, r in df.iterrows()]
+    groups: dict[int, list[dict]] = {}
+    for i, row in enumerate(rows):
+        if dist_km[i] <= _ff.ASSOC_RADIUS_KM:
+            groups.setdefault(int(fac_idx[i]), []).append(row)
+    out: dict[str, dict] = {}
+    for fi, obs in groups.items():
+        frec = _facility_record(fi)
+        out[frec["facility_id"]] = {
+            **_ff.build_facility_baseline(frec, obs),
+            "facility_state": frec["state"], "hazard_type": frec["hazard_type"],
+            "lat": frec["lat"], "lon": frec["lon"],
+        }
+    return out
+
+
+def get_facility_fingerprint(facility_id: str,
+                             exclude_event_id: str | None = None) -> dict | None:
+    """Thermal baseline for one facility. `exclude_event_id` leaves that event's
+    own detections out (so the baseline is 'the facility's other activity')."""
+    frec = _facility_by_id(facility_id)
+    if frec is None:
+        return None
+    exclude_ids: tuple = ()
+    if exclude_event_id:
+        ev = get_event(exclude_event_id)
+        if ev:
+            exclude_ids = tuple(ev.get("alert_ids") or [])
+    if not exclude_ids:
+        cached = _facility_fingerprints_cached(db_signature()).get(str(facility_id))
+        if cached is not None:
+            return cached
+    obs = _alerts_near_facility(frec["lat"], frec["lon"], exclude_ids=exclude_ids)
+    return {**_ff.build_facility_baseline(frec, obs),
+            "facility_state": frec["state"], "hazard_type": frec["hazard_type"],
+            "lat": frec["lat"], "lon": frec["lon"]}
+
+
+def get_event_deviation(event_id: str) -> dict | None:
+    """How far a thermal event departs from its nearest facility's baseline."""
+    ev = get_event(event_id)
+    if not ev:
+        return None
+    import numpy as np
+    tree, _fac = _facility_index()
+    d_rad, idx = tree.query(
+        np.radians([[ev["centroid_lat"], ev["centroid_lon"]]]), k=1)
+    dist_km = float(d_rad[0, 0] * 6371.0)
+    if dist_km > _ff.ASSOC_RADIUS_KM:
+        return {
+            "event_id": event_id, "facility_id": None, "facility_name": None,
+            "dist_facility_km": round(dist_km, 2),
+            "thermal_deviation_score": None,
+            "thermal_deviation_level": "NO_FACILITY",
+            "thermal_behavior_class": "INSUFFICIENT_BASELINE",
+            "baseline_quality": "NO_FACILITY",
+            "signals": [], "evidence": [], "baseline": None,
+            "interpretation": "No known facility within the association radius.",
+            "note": (f"Nearest known facility is {dist_km:.1f} km away — outside the "
+                     f"{_ff.ASSOC_RADIUS_KM:.0f} km association radius; no facility "
+                     f"baseline applies to this event."),
+        }
+    frec = _facility_record(int(idx[0, 0]))
+    # Full facility profile (NOT leave-one-out): with a ~5-day FIRMS window most
+    # facilities have a single burst of activity, so excluding the scored event
+    # collapses every baseline. The event's peak is still compared against the
+    # facility's distribution — a spike stands out even when it is part of it.
+    baseline = get_facility_fingerprint(frec["facility_id"])
+    dev = _ff.compare_event_to_baseline(ev, baseline)
+    overlap = len(set(ev.get("alert_ids") or []))
+    total = (baseline or {}).get("observation_count") or 0
+    dev.update({
+        "event_id": event_id, "dist_facility_km": round(dist_km, 2),
+        "baseline": baseline,
+        "baseline_overlap": {"event_obs": overlap, "baseline_obs": total,
+                             "dominated": total > 0 and overlap / total >= 0.6},
+    })
+    return dev
+
+
+def get_alert_deviation(alert_id: str) -> dict | None:
+    ev = get_event_for_alert(alert_id)
+    return get_event_deviation(ev["event_id"]) if ev else None
+
+
+@lru_cache(maxsize=4)
+def _facility_deviations_cached(_sig: float) -> dict:
+    """facility_id -> the highest-deviation event assessment for that facility."""
+    best: dict[str, dict] = {}
+    for e in _events_cached(db_signature()):
+        dev = get_event_deviation(e.event_id)
+        fid = dev.get("facility_id") if dev else None
+        if not fid:
+            continue
+        sc = dev.get("thermal_deviation_score")
+        if fid not in best:
+            best[fid] = dev
+        elif sc is not None and (best[fid].get("thermal_deviation_score") or -1) < sc:
+            best[fid] = dev
+    return best
+
+
+def rank_facilities_by_deviation(limit: int = 10) -> list[dict]:
+    devs = _facility_deviations_cached(db_signature())
+    rows = []
+    for fid, dev in devs.items():
+        b = dev.get("baseline") or {}
+        rows.append({
+            "facility_id": fid,
+            "facility_name": dev.get("facility_name") or b.get("facility_name"),
+            "facility_type": b.get("facility_type"),
+            "state": b.get("facility_state"),
+            "thermal_deviation_score": dev.get("thermal_deviation_score"),
+            "thermal_deviation_level": dev.get("thermal_deviation_level"),
+            "thermal_behavior_class": dev.get("thermal_behavior_class"),
+            "baseline_quality": b.get("baseline_quality", "INSUFFICIENT_BASELINE"),
+            "evidence": dev.get("evidence", []),
+            "event_id": dev.get("event_id"),
+        })
+    rows.sort(key=lambda r: (r["thermal_deviation_score"] is not None,
+                             r["thermal_deviation_score"] or 0), reverse=True)
+    return rows[:limit]
+
+
+def find_abnormal_facilities(limit: int = 10,
+                             min_level: str = "ABNORMAL") -> list[dict]:
+    order = _ff.DEVIATION_LEVELS
+    cut = order.index(min_level) if min_level in order else 2
+    return [r for r in rank_facilities_by_deviation(limit=200)
+            if r["thermal_deviation_level"] in order[cut:]][:limit]
+
+
+def facility_fingerprint_summary() -> dict:
+    fps = _facility_fingerprints_cached(db_signature())
+    devs = _facility_deviations_cached(db_signature())
+    total = len(fps)
+    insufficient = sum(1 for v in fps.values()
+                       if v.get("baseline_quality") == "INSUFFICIENT_BASELINE")
+    by_level: dict[str, int] = {}
+    for d in devs.values():
+        lvl = d.get("thermal_deviation_level", "INSUFFICIENT_BASELINE")
+        by_level[lvl] = by_level.get(lvl, 0) + 1
+    abnormal = by_level.get("ABNORMAL", 0) + by_level.get("HIGHLY_ABNORMAL", 0)
+    return {
+        "facilities_with_activity": total,
+        "baseline_available": total - insufficient,
+        "insufficient_baseline": insufficient,
+        "events_assessed": len(devs),
+        "abnormal_events": abnormal,
+        "by_level": by_level,
+    }
 
 
 # ── public: incidents ────────────────────────────────────────────────────────
@@ -850,5 +1070,8 @@ def clear_caches() -> None:
     _events_cached.cache_clear()
     data_date_range.cache_clear()
     _india_facilities.cache_clear()
+    _facility_index.cache_clear()
+    _facility_fingerprints_cached.cache_clear()
+    _facility_deviations_cached.cache_clear()
     incidents.cache_clear()
     geo._resolve_cached.cache_clear()

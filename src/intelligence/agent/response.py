@@ -219,8 +219,143 @@ def build(interp: Interpretation, result, mode: str = "deterministic") -> AgentR
         reply.ui_action.setdefault("nav", "Reports")
         return reply
 
+    if it in ("event_list",):
+        evs = result or []
+        if not evs:
+            reply.text = "No thermal events match that scope."
+            return reply
+        top = evs[: (interp.limit or 5)]
+        lines = "; ".join(
+            f"#{e.get('event_id')} {e.get('output_class_short') or ''} "
+            f"({e.get('state') or '—'}, {e.get('observation_count', 0)} obs, "
+            f"risk {e.get('risk_score', 0)})"
+            for e in top
+        )
+        reply.text = f"{len(evs)} thermal event(s). Top by risk: {lines}."
+        return reply
+
+    if it in ("event_detail", "event_replay"):
+        e = result
+        if not e:
+            reply.text = "I couldn't find that thermal event."
+            return reply
+        if "frames" in e:  # evolution payload (replay)
+            reply.text = (f"Event has {e.get('observation_count', 0)} observation(s) "
+                          f"from {e.get('start_date')} to {e.get('end_date')} — "
+                          f"open Investigation to replay it.")
+        else:
+            reply.text = (
+                f"Event #{e.get('event_id')}: {e.get('observation_count', 0)} detections "
+                f"over {e.get('duration_days', 0)} day(s) near "
+                f"{e.get('district') or e.get('state') or '—'}. "
+                f"Peak FRP {e.get('peak_frp_mw', '—')} MW · risk {e.get('risk_score', 0)}/100 "
+                f"({e.get('severity', '—')})."
+            )
+        return reply
+
+    if it == "event_fingerprint":
+        fp = result or {}
+        reply.text = (
+            f"Behaviour fingerprint: persistence {fp.get('persistence', '?')}, "
+            f"night activity {fp.get('night_activity', '?')}, FRP intensity "
+            f"{fp.get('frp_intensity', '?')}, industrial proximity "
+            f"{fp.get('industrial_proximity', '?')} → "
+            f"**{fp.get('behaviour_category', 'Insufficient Evidence')}** "
+            f"(a behavioural assessment, not ground truth)."
+        ) if fp else "No fingerprint available for that event."
+        return reply
+
+    if it == "event_evidence":
+        ev = result or {}
+        reply.text = (
+            f"{ev.get('total_supporting', 0)} supporting, "
+            f"{ev.get('total_limiting', 0)} limiting evidence items. "
+            + "; ".join(i["label"] for i in ev.get("supporting", [])[:3])
+        ) if ev else "No evidence stack available."
+        return reply
+
+    if it == "event_evolution":
+        evo = result or {}
+        ms = evo.get("milestones", [])
+        reply.text = (
+            f"{evo.get('observation_count', 0)} observation(s) from "
+            f"{evo.get('start_date')} to {evo.get('end_date')}. "
+            + " → ".join(m["label"] for m in ms)
+        ) if evo else "No evolution timeline available."
+        return reply
+
+    if it == "event_trajectory":
+        tr = result
+        if isinstance(tr, list):
+            reply.text = (f"{len(tr)} event(s) with an increasing risk trajectory."
+                          if tr else "No events currently show an increasing risk trajectory.")
+            return reply
+        tr = tr or {}
+        reply.text = (
+            f"Risk trajectory: **{tr.get('state', 'UNKNOWN')}** "
+            f"(Δrisk {tr.get('delta', 0):+d}). "
+            + "; ".join(tr.get("signals", []))
+            + " Observed trend only — not a prediction."
+        )
+        return reply
+
+    if it == "event_deviation":
+        d = result
+        if not d:
+            reply.text = "I couldn't find that thermal event."
+            return reply
+        if d.get("thermal_deviation_score") is None:
+            bits = [d.get("interpretation"), *d.get("evidence", []), d.get("note")]
+            reply.text = next((b for b in bits if b),
+                              "Insufficient facility baseline to assess deviation.")
+            return reply
+        ev_txt = "; ".join(d.get("evidence", [])[:3]) or "no material deviations"
+        reply.text = (
+            f"Event {d['event_id']} vs "
+            f"{d.get('facility_name') or 'the nearest facility'} baseline: "
+            f"**thermal deviation {d['thermal_deviation_score']}/100 — "
+            f"{d['thermal_deviation_level']}**. {ev_txt}. "
+            f"{d.get('interpretation', '')} "
+            "This is a behavioural baseline signal — separate from the risk score "
+            "and the model class probability, and not a confirmed-fire determination."
+        )
+        return reply
+
+    if it in ("abnormal_facilities", "rank_facility_deviation"):
+        facs = result or []
+        if not facs:
+            reply.text = (
+                "No facilities currently show a usable baseline with abnormal "
+                "deviation — the FIRMS NRT window is only ~5 days, so most "
+                "facilities have insufficient history for a baseline."
+            )
+            return reply
+        lines = "; ".join(
+            f"{f.get('facility_name') or f.get('facility_id')} "
+            f"({f.get('thermal_deviation_level')}"
+            + (f", {f['thermal_deviation_score']}/100" if f.get('thermal_deviation_score') is not None else "")
+            + ")"
+            for f in facs[:5]
+        )
+        reply.text = (f"{len(facs)} facilit{'y' if len(facs) == 1 else 'ies'} by "
+                      f"thermal deviation from baseline: {lines}.")
+        return reply
+
+    if it == "fp_summary":
+        s = result or {}
+        reply.text = (
+            f"Facility thermal baselines: {s.get('baseline_available', 0)} of "
+            f"{s.get('facilities_with_activity', 0)} facilities with nearby activity "
+            f"have enough history for a baseline "
+            f"({s.get('insufficient_baseline', 0)} insufficient — the FIRMS NRT "
+            f"window is only ~5 days). {s.get('events_assessed', 0)} events assessed, "
+            f"{s.get('abnormal_events', 0)} abnormal."
+        )
+        return reply
+
     # rank / list
-    alerts = result or []
+    alerts = [a for a in (result or [])
+              if isinstance(a, dict) and "alert_id" in a and "output_class_short" in a]
     if not alerts:
         reply.text = f"No alerts match{_scope_phrase(interp.filters)}."
         return reply

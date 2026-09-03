@@ -607,14 +607,61 @@ tests/
 
   # Thermal Event Intelligence (Session 10)
   test_clustering.py      (11 tests — cluster_alerts, ThermalEvent, event IDs)
-  test_fingerprint.py     (9 tests  — dimensions, behaviour categories)
+  test_fingerprint.py     (9 tests  — event-behaviour dimensions, categories)
   test_evidence.py        (7 tests  — direction routing, system items, no fabrication)
   test_evolution.py       (9 tests  — frames, milestones, edge cases)
   test_early_warning.py   (9 tests  — state transitions, trajectory, signals)
   test_events.py          (8 tests  — query functions, LRU cache invalidation)
   test_agent_events.py    (10 tests — event intents, deterministic parser)
 
-Total: 161 tests, all passing.
+  # Facility Thermal Fingerprinting (Session 11)
+  test_facility_fingerprint.py (25 tests — baseline gate, NORMAL/ELEVATED/
+                                HIGHLY_ABNORMAL, missing FRP/BT/facility, day-night
+                                & persistence deviation, determinism, no fabrication,
+                                risk-engine + lifecycle + agent regression guards)
+
+Total: 186 tests, all passing.
+```
+
+### Facility Thermal Fingerprinting (Session 11, additive)
+
+```
+src/intelligence/facility_fingerprint.py     (NEW — pure, deterministic, no Streamlit/LLM)
+  build_facility_baseline(facility, observations) -> baseline dict
+      robust stats (statistics.median / quantiles / MAD) for FRP, brightness
+      temperature, persistence, day-night ratio, active months.
+      gate: >=6 obs across >=2 days  ->  baseline_quality LIMITED / OK
+      else                            ->  INSUFFICIENT_BASELINE (fields stay None)
+  compare_event_to_baseline(event, baseline) -> deviation dict
+      per-signal 0-100 (intensity, brightness, persistence, day_night, seasonal),
+      weighted by SIGNAL_WEIGHTS  ->  thermal_deviation_score / _level / behavior_class
+      + deterministic evidence[] strings (real numbers, no LLM)
+
+queries.py  (extended, not rewritten)
+  _facility_index()                  the ONE detection<->facility BallTree
+  get_facility_fingerprint / get_event_deviation / get_alert_deviation
+  rank_facilities_by_deviation / find_abnormal_facilities
+  facility_fingerprint_summary
+  facilities_with_activity rows  +=  baseline_quality / deviation_level / deviation_score
+
+risk_engine.deviation_factor(score)  additive helper — NOT called by score_row.
+                                     risk_score / severity / thresholds unchanged.
+
+Three distinct scores, never merged:
+  model class probability   RandomForest (prob_A / prob_B_candidate)
+  risk_score                risk_engine additive rule (operational priority)
+  thermal_deviation_score   facility_fingerprint (baseline-relative behaviour)
+
+Data flow:
+  FIRMS -> alert_store -> queries._alerts()
+        -> clustering.cluster_alerts()  -> ThermalEvent
+        -> _facility_index() nearest facility (centroid)
+        -> build_facility_baseline(facility, detections within 10 km)
+        -> compare_event_to_baseline(event, baseline)  -> deviation
+        -> Investigation panel / Facilities table / Analytics section / agent tools
+
+UI (additive only): investigation._render_facility_deviation, facilities table
++ focus block, analytics "Facility thermal baselines", model + limitations notes.
 ```
 
 **Manual smoke:** `streamlit run dashboard/app.py` — every section loads; event

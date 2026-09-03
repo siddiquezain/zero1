@@ -342,6 +342,33 @@ def explain_score(row: dict | pd.Series) -> list[tuple[str, int]]:
     return list(score_row(row).factors)
 
 
+# ── facility thermal-deviation (additive, opt-in — NOT used by score_row) ──────
+# The facility-fingerprint deviation score (src/intelligence/facility_fingerprint.py)
+# is a distinct behavioural signal. It is deliberately kept out of `score_row`:
+# scoring is row-level and runs before events / facility baselines exist, and
+# folding it in would change existing risk_score / severity values. This helper
+# lets a caller present the deviation as a *supplementary* risk factor without
+# mutating the stored score. The weight is transparent and configurable here.
+DEVIATION_FACTOR_WEIGHTS: tuple[tuple[int, int], ...] = (
+    (70, 15),   # HIGHLY_ABNORMAL
+    (45, 12),   # ABNORMAL
+    (20, 6),    # ELEVATED
+)
+
+
+def deviation_factor(deviation_score: int | float | None) -> tuple[str, int] | None:
+    """Map a 0-100 thermal-deviation score to a (reason, +points) factor tuple,
+    or None below the ELEVATED band. Callers may append this to a factor list
+    for display; it is never written to the alert store."""
+    if deviation_score is None:
+        return None
+    for threshold, pts in DEVIATION_FACTOR_WEIGHTS:
+        if deviation_score >= threshold:
+            return (f"Thermal behaviour deviates from the facility baseline "
+                    f"({int(deviation_score)}/100)", pts)
+    return None
+
+
 if __name__ == "__main__":
     import pandas as pd
     df = pd.read_parquet("data/processed/stage6_india_scores.parquet")

@@ -42,6 +42,14 @@ _ITEMS = [
      "The Fire Intelligence Agent can query, filter, navigate and prepare reports. "
      "It cannot acknowledge / escalate / resolve or change any record — those stay "
      "with the operator. A deliberate safety choice."),
+    ("Facility baselines need history",
+     "The Facility Thermal Fingerprint compares an event with a site's own observed "
+     "thermal profile. With a ~5-day FIRMS NRT window most facilities have too few "
+     "observations, so they are reported as INSUFFICIENT_BASELINE rather than given "
+     "invented statistics. Where a baseline exists it is a short-window profile, and "
+     "for single-burst sites it includes the event's own detections. The deviation "
+     "score is a behavioural signal — separate from the risk score and the model "
+     "probability — and an abnormal thermal event is never a confirmed fire."),
 ]
 
 

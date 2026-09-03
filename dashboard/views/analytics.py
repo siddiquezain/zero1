@@ -62,6 +62,29 @@ def render() -> None:
                        f'<div class="kpi-sub">current vs baseline median</div></div>',
                        unsafe_allow_html=True)
 
+    # ── facility thermal baselines ─────────────────────────────────────
+    ui.section("Facility thermal baselines", "deviation from each site's own profile")
+    fs = data.FP_SUMMARY()
+    fc = st.columns(4)
+    fc[0].metric("Facilities w/ activity", fs.get("facilities_with_activity", 0))
+    fc[1].metric("Baseline available", fs.get("baseline_available", 0))
+    fc[2].metric("Insufficient baseline", fs.get("insufficient_baseline", 0))
+    fc[3].metric("Abnormal events", fs.get("abnormal_events", 0))
+    rank = [r for r in data.FACILITY_DEV_RANK(15)
+            if r.get("thermal_deviation_score") is not None]
+    if rank:
+        st.dataframe(pd.DataFrame([{
+            "Facility": r.get("facility_name") or r["facility_id"],
+            "State": r.get("state") or "—",
+            "Deviation": f'{r["thermal_deviation_score"]}/100',
+            "Level": r["thermal_deviation_level"],
+            "Baseline": r.get("baseline_quality", "—"),
+        } for r in rank]), hide_index=True, use_container_width=True)
+    else:
+        ui.empty_state("No facility has a usable baseline yet.",
+                       "The FIRMS NRT window is ~5 days; most facilities have too "
+                       "few observations. Shown honestly rather than fabricated.")
+
     # ── classification / severity / land-cover ─────────────────────────
     ui.section("Classification analysis")
     c1, c2, c3 = st.columns(3, gap="medium")
