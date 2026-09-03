@@ -71,7 +71,7 @@ def _stage_html(thinking: bool = False) -> str:
     0%,100%{{filter:drop-shadow(0 0 0px rgba(61,125,200,.55));}}
     50%{{filter:drop-shadow(0 0 14px rgba(61,125,200,.8));}}
   }}
-  .bot-card img{{height:{_STAGE_H - 38}px;width:auto;display:block;transform:scaleX(-1);{bob}}}
+  .bot-card img{{height:{_STAGE_H - 18}px;width:auto;display:block;transform:scaleX(-1);{bob}}}
   @keyframes agent-bob{{0%,100%{{transform:scaleX(-1) translateY(0);}}50%{{transform:scaleX(-1) translateY(-8px);}}}}
   {hover_rule}
   /* pulsing ring shown only while thinking */
