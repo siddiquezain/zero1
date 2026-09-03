@@ -51,10 +51,12 @@ def alert_card(a: dict, *, ago: str = "", show_button: bool = True,
     loc = a.get("place") or a.get("state") or a.get("zone") or "—"
     frp = a["frp_mw"] if a["frp_mw"] is not None else "—"
     title = f"{a['output_class_short']} Detected"
+    aid_short = str(a.get("alert_id", ""))[:12]
     st.markdown(
         f'<div class="acard" style="border-left-color:{c}">'
         f'<div class="r1">{T.sev_chip(sev)}'
         f'<span class="title">{_esc(title)}</span>'
+        f'<span style="font-family:var(--mono);font-size:9.5px;color:var(--t2);margin-left:6px">{_esc(aid_short)}</span>'
         f'<span style="margin-left:auto" class="ago">{_esc(ago)}</span></div>'
         f'<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:4px">'
         f'<div><div class="loc">{_esc(loc)}</div>'

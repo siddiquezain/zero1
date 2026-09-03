@@ -30,9 +30,14 @@ _ACTIONS_FULL = ["open_investigation", "show_on_map", "generate_report"]
 def _alert_card(a: dict, actions: list[str] | None = None) -> dict:
     loc = a.get("place") or a.get("state") or a.get("zone") \
           or f"{a['lat']:.3f}, {a['lon']:.3f}"
-    sub = (f"{a['severity']} · Risk {a['risk_score']}/100 · "
-           f"FRP {a['frp_mw'] if a['frp_mw'] is not None else '—'} MW · "
-           f"Persist {a['persistence_count']}x · {a['acq_date']}")
+    conf_pct = round((a.get("model_class_probability") or 0) * 100)
+    anomaly_label = "YES ⚠" if a.get("anomaly_flag") else "no"
+    frp_str = f"{a['frp_mw']} MW" if a['frp_mw'] is not None else "—"
+    sub = (
+        f"{a['alert_id']} · {a['severity']} · Confidence {conf_pct}% · "
+        f"Risk {a['risk_score']}/100 · Anomaly {anomaly_label} · "
+        f"FRP {frp_str} · {a['acq_date']}"
+    )
     return {
         "title": f"{a['output_class_short']} — {loc}",
         "subtitle": sub,
@@ -140,14 +145,21 @@ def build(interp: Interpretation, result, mode: str = "deterministic") -> AgentR
             return reply
         h = inv["header"]
         why = inv["why_flagged"]
+        prob_pct = h['model_class_probability_pct']
+        why_text = "; ".join(why) if why else "limited supporting signals"
+        anomaly_str = "YES" if inv["classification"]["anomaly_flag"] else "no"
+        frp_val = inv["detection"]["frp_mw"]
+        frp_str = f"{frp_val} MW" if frp_val is not None else "—"
         reply.text = (
-            f"**{h['output_class_short']} near {h['location']}** — "
-            f"risk {h['risk_score']}/100 ({h['severity']}), model class probability "
-            f"{h['model_class_probability_pct']}%, status {h['status']}.\n\n"
-            "Flagged because: " + ("; ".join(why) if why else "limited supporting signals") + ".\n\n"
+            f"**{h['output_class_short']} near {h['location']}**\n\n"
+            f"Observed: Thermal anomaly detected · {inv['detection']['acq_date']} · "
+            f"{inv['detection']['day_night']} · FRP {frp_str}\n\n"
+            f"Model prediction: {h['output_class_short']} — {prob_pct}% confidence · "
+            f"Anomaly flag {anomaly_str} · Risk {h['risk_score']}/100 ({h['severity']})\n\n"
+            f"Flagged because: {why_text}\n\n"
             f"Recommended: **{inv['recommended_action']['action']}** — "
             f"{inv['recommended_action']['reason']}\n\n"
-            f"_{inv['classification']['framing']}_"
+            f"Note: {inv['classification']['framing']}"
         )
         a = queries.get_alert(inv["alert_id"])
         if a:

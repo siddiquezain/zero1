@@ -16,7 +16,7 @@ import os
 from src.intelligence.agent import deterministic, response, tools
 from src.intelligence.agent.response import AgentReply
 
-_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5")
+_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 _MAX_TOOL_ROUNDS = 4
 
 _SYSTEM = (

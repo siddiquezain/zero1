@@ -120,12 +120,15 @@ def render() -> None:
 
         ui.section("Classification")
         cl = inv["classification"]
+        prob_a_pct = round((cl["prob_A"] or 0) * 100)
+        prob_b_pct = round((cl["prob_B_candidate"] or 0) * 100)
+        anomaly_val = "YES — pattern anomaly ⚠" if cl["anomaly_flag"] else "no"
         _kv([
-            ("Output class", h["output_class_short"]),
-            ("Model label", cl["predicted_label"] or "—"),
-            ("P(persistent / A)", f'{cl["prob_A"]}'),
-            ("P(natural / B)", f'{cl["prob_B_candidate"]}'),
-            ("Anomaly flag", "yes" if cl["anomaly_flag"] else "no"),
+            ("Model classification", h["output_class_short"]),
+            ("Raw model label", cl["predicted_label"] or "—"),
+            ("P(Industrial / Persistent — A)", f"{prob_a_pct}%"),
+            ("P(Natural Fire — B)", f"{prob_b_pct}%"),
+            ("Anomaly detected", anomaly_val),
         ])
         st.markdown(f'<div class="mini" style="line-height:1.6;margin-top:6px">'
                     f'<em>{cl["framing"]}</em></div>', unsafe_allow_html=True)

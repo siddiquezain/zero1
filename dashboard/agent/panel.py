@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import html as _html
+import re
 import time as _time
 
 import streamlit as st
@@ -30,11 +31,14 @@ from dashboard import data, state
 from dashboard.components import ui
 
 _EXAMPLES = [
-    "Show critical industrial fires in Odisha in the last 7 days",
+    "Show all critical and high alerts",
+    "Which alerts have anomaly flags?",
     "Find persistent sources near thermal power plants",
-    "Why is the Surat alert critical?",
-    "Compare Odisha and Jharkhand",
-    "Generate report for high-risk incidents this week",
+    "Show industrial fire candidates in the last 3 days",
+    "Compare eastern india and central india",
+    "What is the system summary?",
+    "Why is the highest-risk alert flagged?",
+    "Generate report for high-risk incidents",
 ]
 
 _MODEL_JS = "/app/static/model-viewer.min.js"
@@ -114,7 +118,13 @@ def _render_message(m: dict, scope: str, idx: int) -> None:
         st.markdown(f'<div class="agent-msg-user">{_html.escape(m["text"])}</div>',
                     unsafe_allow_html=True)
         return
-    body = _html.escape(m["text"]).replace("\n", "<br>").replace("**", "")
+    # Render **bold** as <strong> in the HTML output.
+    # Substitute placeholders before html.escape so the tags survive escaping.
+    raw = m["text"]
+    raw = re.sub(r'\*\*([^*\n]+)\*\*', r'\x00BOLD\x00\1\x00ENDBOLD\x00', raw)
+    body = _html.escape(raw)
+    body = body.replace('\x00BOLD\x00', '<strong>').replace('\x00ENDBOLD\x00', '</strong>')
+    body = body.replace("\n", "<br>")
     st.markdown(f'<div class="agent-msg-bot">{body}</div>', unsafe_allow_html=True)
 
     for j, card in enumerate(m.get("cards", []) or []):
@@ -151,8 +161,14 @@ def render(context: dict | None = None, *, scope: str = "dock",
     # ── header: name (docked only — the dialog has its own title) + status ─
     name = ('<span class="agent-h-name">Fire Intelligence Agent</span>'
             if collapsible else "<span></span>")
+    if online:
+        status_dot = '<i style="background:#3d7dc8;box-shadow:0 0 0 3px rgba(61,125,200,0.22)"></i>'
+        status_label = "CLAUDE"
+    else:
+        status_dot = '<i style="background:#f59e0b;box-shadow:0 0 0 3px rgba(245,158,11,0.18)"></i>'
+        status_label = "LOCAL"
     st.markdown(f'<div class="agent-head">{name}'
-                '<span class="agent-status"><i></i>ONLINE</span></div>',
+                f'<span class="agent-status">{status_dot}{status_label}</span></div>',
                 unsafe_allow_html=True)
 
     # ── robot stage — model mounts once; the busy state is a CSS overlay ─
@@ -162,8 +178,10 @@ def render(context: dict | None = None, *, scope: str = "dock",
             st.markdown('<div class="agent-scan"><span>ANALYSING</span></div>',
                         unsafe_allow_html=True)
 
+    from src.intelligence.agent.claude import _MODEL as _claude_model
+    mode_note = f"Claude {_claude_model} · tool-use reasoning" if online else "Deterministic parser · offline mode"
     st.markdown(
-        f'<div class="agent-note">{"Claude-enhanced reasoning" if online else "Local intelligence mode"}'
+        f'<div class="agent-note">{mode_note}'
         f' · read-only · same data as the dashboard</div>',
         unsafe_allow_html=True,
     )

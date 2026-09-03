@@ -70,7 +70,8 @@ def build_deck(alerts: list[dict], *, colour_by: str = "class",
         df["color"] = df["color"].apply(lambda v: v if isinstance(v, list) else [150, 150, 150, 160])
         df["radius"] = df["risk_score"].apply(lambda s: 6000 + int(s) * 260)
         df["tip"] = df.apply(lambda r: (
-            f"{_s(r['output_class_short'])}  -  {_s(r['severity'])}  -  Risk {r['risk_score']}/100\n"
+            f"{_s(r['alert_id'])}  -  {_s(r['output_class_short'])}\n"
+            f"{_s(r['severity'])}  -  Risk {r['risk_score']}/100\n"
             f"{_s(r.get('place')) or _s(r.get('state')) or _s(r.get('zone')) or '-'}\n"
             f"FRP {r['frp_mw'] if pd.notna(r['frp_mw']) else '-'} MW  -  "
             f"Persist {int(r['persistence_count'])}x  -  {_s(r['acq_date'])}"

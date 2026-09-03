@@ -55,7 +55,7 @@ def topbar(active_page: str) -> None:
         f'<div class="topbar">'
         f'<div style="display:flex;align-items:center;gap:14px">'
         f'<div class="tb-pills">'
-        f'<span class="tb-pill"><span class="dot"></span>LIVE</span>'
+        f'<span class="tb-pill"><span class="dot" style="background:#f59e0b;box-shadow:0 0 0 3px rgba(245,158,11,0.2)"></span>NRT SNAPSHOT</span>'
         f'<span class="tb-pill">{_ist_now()}</span>'
         f'<span class="tb-pill">VIIRS 375m / MODIS 1km</span>'
         f'<span class="tb-pill">window {lo} → {hi}</span>'
