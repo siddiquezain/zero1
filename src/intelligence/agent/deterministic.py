@@ -231,6 +231,65 @@ def parse(message: str, context: dict | None = None) -> Interpretation:
         I.tool = "situation_summary"
         return I
 
+    # ── EVENT INTENTS ─────────────────────────────────────────────────────────
+    import re as _re
+    _event_id_match = _re.search(r'\bevent\s+([0-9a-f]{8})\b', text, _re.I)
+    _eid = _event_id_match.group(1).lower() if _event_id_match else None
+
+    if _eid:
+        if any(kw in text for kw in ("fingerprint", "behaviour", "behavior", "signature")):
+            return Interpretation(understood=True, tool="get_event_fingerprint",
+                                  args={"event_id": _eid}, intent="event_fingerprint",
+                                  message=f"Fetching behaviour fingerprint for event {_eid}.")
+        if any(kw in text for kw in ("evidence", "why", "reason", "because", "support")):
+            return Interpretation(understood=True, tool="get_event_evidence",
+                                  args={"event_id": _eid}, intent="event_evidence",
+                                  message=f"Fetching evidence stack for event {_eid}.")
+        if any(kw in text for kw in ("evolv", "evolution", "timeline", "history")):
+            return Interpretation(understood=True, tool="get_event_evolution",
+                                  args={"event_id": _eid}, intent="event_evolution",
+                                  message=f"Fetching evolution timeline for event {_eid}.")
+        if any(kw in text for kw in ("replay", "play", "animate")):
+            return Interpretation(understood=True, tool="get_event_evolution",
+                                  args={"event_id": _eid}, intent="event_replay",
+                                  nav="Investigation",
+                                  message=f"Loading event replay for event {_eid}.")
+        if any(kw in text for kw in ("trajector", "risk trend", "increasing", "warning")):
+            return Interpretation(understood=True, tool="get_event_trajectory",
+                                  args={"event_id": _eid}, intent="event_trajectory",
+                                  message=f"Computing risk trajectory for event {_eid}.")
+        # Default for bare event ID mention → event detail
+        return Interpretation(understood=True, tool="get_event",
+                              args={"event_id": _eid}, intent="event_detail",
+                              nav="Investigation",
+                              message=f"Fetching details for event {_eid}.")
+
+    # ── Event list intents ────────────────────────────────────────────────────
+    _is_event_list = any(kw in text for kw in (
+        "event", "events", "thermal event", "thermal events", "cluster", "clusters"
+    ))
+    if _is_event_list and any(kw in text for kw in ("increasing", "rising", "growing")):
+        return Interpretation(understood=True, tool="find_increasing_risk_events",
+                              args={"limit": 10}, intent="event_trajectory",
+                              message="Finding thermal events with increasing risk trajectory.")
+
+    if _is_event_list:
+        _ev_filters: dict = {}
+        for sev in ("critical", "high", "medium", "low"):
+            if sev in text:
+                _ev_filters["severity"] = [sev.upper()]
+                break
+        for token in text.replace(",", " ").split():
+            cs = geo.canonical_state(token.title())
+            if cs:
+                _ev_filters["state"] = cs
+                break
+        return Interpretation(understood=True, tool="list_events",
+                              args={"filters": _ev_filters or None, "limit": 20},
+                              intent="event_list",
+                              filters=_ev_filters or None,
+                              message="Listing thermal events by risk score.")
+
     lim = _limit(text)
     wants_why = bool(re.search(r"\bwhy\b|\bexplain\b", text))
     is_ranking = lim is not None or bool(
@@ -364,3 +423,7 @@ def parse(message: str, context: dict | None = None) -> Interpretation:
 def _clean_place(s: str) -> str:
     s = re.sub(r"\b(alerts?|incidents?|fires?|region|state|the|situation|data)\b", "", s)
     return " ".join(s.split()).strip(" .,")
+
+
+# alias for test compatibility
+interpret = parse

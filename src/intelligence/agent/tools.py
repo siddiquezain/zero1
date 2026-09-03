@@ -117,6 +117,53 @@ _reg(Tool("export_csv", "Export filtered alerts as CSV (string).",
           {"filters": _FILTERS_PARAM}))
 
 
+_reg(Tool("list_events",
+          "List thermal events (clustered groups of nearby detections). "
+          "Returns events sorted by risk_score by default.",
+          lambda filters=None, sort_by="risk_score", limit=20:
+              queries.list_events(filters, sort_by=sort_by, limit=limit),
+          {"filters": _FILTERS_PARAM,
+           "sort_by": {"type": "string", "enum": ["risk_score", "frp_mw"]},
+           "limit": {"type": "integer"}}))
+
+_reg(Tool("get_event",
+          "Get full details of a single thermal event by event_id.",
+          lambda event_id: queries.get_event(event_id),
+          {"event_id": {"type": "string"}}))
+
+_reg(Tool("get_event_fingerprint",
+          "Behavioural fingerprint for a thermal event: persistence, night activity, "
+          "FRP intensity, spatial stability, industrial proximity, seasonal alignment.",
+          lambda event_id: queries.get_event_fingerprint(event_id),
+          {"event_id": {"type": "string"}}))
+
+_reg(Tool("get_event_evidence",
+          "Structured evidence stack for a thermal event: supporting and limiting "
+          "evidence items with categories, values, and explanations.",
+          lambda event_id: queries.get_event_evidence(event_id),
+          {"event_id": {"type": "string"}}))
+
+_reg(Tool("get_event_evolution",
+          "Ordered timeline and frame sequence for event evolution replay.",
+          lambda event_id: queries.get_event_evolution(event_id),
+          {"event_id": {"type": "string"}}))
+
+_reg(Tool("get_event_trajectory",
+          "Risk trajectory for a thermal event. Returns state (STABLE / WATCH / "
+          "INCREASING / EARLY WARNING / HIGH PRIORITY), delta, and signals.",
+          lambda event_id: queries.get_event_trajectory(event_id),
+          {"event_id": {"type": "string"}}))
+
+_reg(Tool("find_increasing_risk_events",
+          "Find thermal events whose risk trajectory is INCREASING.",
+          lambda limit=10: queries.find_increasing_risk_events(limit=limit),
+          {"limit": {"type": "integer"}}))
+
+_reg(Tool("events_situation",
+          "Summary counts: total events, high-risk, persistent sources, early warnings.",
+          lambda: queries.events_situation(), {}))
+
+
 READ_ONLY_TOOL_NAMES = tuple(REGISTRY.keys())
 
 
