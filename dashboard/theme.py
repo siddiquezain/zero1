@@ -193,33 +193,45 @@ html, body, [data-testid="stAppViewContainer"], .stApp {{
 .agent-h-name {{ font-size:12.5px; font-weight:700; letter-spacing:.01em; }}
 .agent-status {{ display:flex; align-items:center; gap:5px; font:600 9px/1 var(--mono);
   letter-spacing:.14em; color:var(--t1); }}
-.agent-status i {{ width:5px; height:5px; border-radius:50%; background:var(--low); box-shadow:0 0 0 3px {LOW}22; }}
-.agent-note {{ font-size:9.5px; color:var(--t2); text-align:center; padding:7px 2px 2px; letter-spacing:.02em; line-height:1.5; }}
-/* processing overlay drawn around the (always-static) robot while a query runs */
-[class*="st-key-agentstage"] {{ position:relative; }}
-.agent-scan {{ position:absolute; left:0; right:0; top:0; margin:0 auto; max-width:360px; height:196px;
-  pointer-events:none; border-radius:8px; overflow:hidden; box-shadow:inset 0 0 0 1px rgba(61,125,200,.42); }}
-.agent-scan::before {{ content:""; position:absolute; inset:-45%;
-  background:conic-gradient(from 0deg, transparent 205deg, rgba(61,125,200,.30) 320deg, transparent 360deg);
-  animation:agent-sweep 3s linear infinite; }}
-.agent-scan > span {{ position:absolute; left:12px; bottom:11px; font:600 9px/1 var(--mono);
-  letter-spacing:.16em; color:#8fbce6; text-shadow:0 1px 3px rgba(0,0,0,.6); }}
-.agent-scan > span::after {{ content:" …"; animation:agent-blink 1.1s steps(1,end) infinite; }}
-@keyframes agent-sweep {{ to {{ transform:rotate(360deg); }} }}
-@keyframes agent-blink {{ 50% {{ opacity:.25; }} }}
+.agent-status i {{ width:5px; height:5px; border-radius:50%; }}
+.agent-note {{ font-size:9.5px; color:var(--t2); text-align:center; padding:7px 2px 2px;
+  letter-spacing:.02em; line-height:1.5; }}
+/* animated dot indicator shown below the stage while thinking */
+.agent-thinking {{ display:flex; align-items:center; justify-content:center; gap:4px;
+  padding:6px 0 2px; }}
+.agent-dot {{ width:5px; height:5px; border-radius:50%; background:var(--accent);
+  animation:dot-bounce .9s ease-in-out infinite; }}
+.agent-dot:nth-child(2) {{ animation-delay:.18s; }}
+.agent-dot:nth-child(3) {{ animation-delay:.36s; }}
+@keyframes dot-bounce {{ 0%,80%,100%{{transform:scale(0.6);opacity:.4;}} 40%{{transform:scale(1);opacity:1;}} }}
+.agent-thinking-label {{ font:600 9px/1 var(--mono); letter-spacing:.14em; color:#8fbce6; margin-left:6px; }}
 .agent-tagline {{ font-size:11px; color:var(--t1); text-align:center; padding:11px 6px 3px; line-height:1.55; }}
 .agent-sep {{ display:flex; align-items:center; gap:8px; margin:13px 0 8px;
   font:700 9.5px/1 var(--mono); letter-spacing:.16em; text-transform:uppercase; color:var(--t2); }}
 .agent-sep::after {{ content:""; flex:1; height:1px; background:var(--bd); }}
+/* message meta line — timestamp + author above message content */
+.agent-msg-meta {{ display:block; font:500 9px/1 var(--mono); letter-spacing:.06em;
+  color:var(--t2); margin-bottom:4px; }}
 .agent-msg-user {{ background:var(--panel2); border:1px solid var(--bd2); border-right:2px solid var(--accent);
-  color:var(--t0); padding:7px 10px; border-radius:6px; font-size:11.5px; line-height:1.5;
-  margin:5px 0 5px auto; max-width:86%; width:fit-content; }}
+  color:var(--t0); padding:8px 11px; border-radius:6px; font-size:11.5px; line-height:1.5;
+  margin:5px 0 5px auto; max-width:88%; width:fit-content; }}
 .agent-msg-bot {{ background:var(--panel); border:1px solid var(--bd); color:var(--t0);
-  padding:8px 11px; border-radius:6px; font-size:11.5px; line-height:1.55; margin:5px auto 8px 0; max-width:95%; }}
+  padding:9px 12px; border-radius:6px; font-size:11.5px; line-height:1.6;
+  margin:5px auto 8px 0; max-width:96%; }}
+/* suggestion chips — target buttons inside the agent_chips container */
+[data-st-key^="agent_chips"] button {{
+  font-size:10.5px !important; border-radius:999px !important;
+  border-color:var(--bd2) !important; color:var(--t1) !important;
+  padding:4px 12px !important; background:var(--panel2) !important;
+}}
+[data-st-key^="agent_chips"] button:hover {{
+  background:#1c2634 !important; color:var(--t0) !important;
+  border-color:var(--accent) !important;
+}}
 .rc {{ border:1px solid var(--bd2); border-left:2px solid var(--accent); border-radius:6px;
-  padding:8px 11px; margin:6px 0 4px; background:var(--panel2); }}
+  padding:9px 12px; margin:6px 0 4px; background:var(--panel2); }}
 .rc .rc-t {{ font-size:11.5px; font-weight:600; }}
-.rc .rc-s {{ font-size:10px; color:var(--t1); font-family:var(--mono); margin-top:2px; }}
+.rc .rc-s {{ font-size:10px; color:var(--t1); font-family:var(--mono); margin-top:3px; }}
 
 .legend {{ display:flex; gap:16px; flex-wrap:wrap; font-size:10.5px; color:var(--t1); }}
 .legend span {{ display:flex; align-items:center; gap:5px; }}

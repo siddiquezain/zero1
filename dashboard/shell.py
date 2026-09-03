@@ -59,10 +59,15 @@ def sidebar_refresh_card() -> None:
 def sidebar_agent_card() -> None:
     st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="panel" style="padding:11px 12px">'
+        '<div class="panel" style="padding:10px 12px">'
+        '<div style="display:flex;align-items:center;gap:10px">'
+        '<img src="/app/static/agent-bot.webp" style="width:40px;height:40px;'
+        'object-fit:contain;border-radius:7px;background:#fff;padding:2px;flex:none">'
+        '<div>'
         '<div style="font-size:11.5px;font-weight:700">Fire Intelligence Agent</div>'
-        '<div style="font-size:10px;color:#5a6472;margin-top:3px;line-height:1.5">'
-        'Ask questions in plain English — read-only.</div></div>',
+        '<div style="font-size:10px;color:#5a6472;margin-top:2px;line-height:1.4">'
+        'Natural language · read-only</div>'
+        '</div></div></div>',
         unsafe_allow_html=True,
     )
     if st.button("⌘  Ask Agent", key="side_ask_agent", use_container_width=True, type="primary"):
