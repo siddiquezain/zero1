@@ -723,8 +723,131 @@ def geo_audit() -> dict:
     return rep
 
 
+# ── public: thermal events ────────────────────────────────────────────────────
+@lru_cache(maxsize=8)
+def _events_cached(_sig: float) -> list:
+    from src.intelligence.clustering import cluster_alerts
+    alerts_list = [_row_to_alert(r) for _, r in _alerts().iterrows()]
+    return cluster_alerts(alerts_list)
+
+
+def _event_to_dict(e) -> dict:
+    from dataclasses import asdict
+    return asdict(e)
+
+
+def _get_event_observations(e) -> list[dict]:
+    df = _alerts()
+    obs_df = df[df["alert_id"].isin(e.alert_ids)]
+    return [_row_to_alert(r) for _, r in obs_df.iterrows()]
+
+
+def list_events(filters: dict | None = None, sort_by: str = "risk_score",
+                limit: int = 500) -> list[dict]:
+    events = _events_cached(db_signature())
+    dicts = [_event_to_dict(e) for e in events]
+    if filters:
+        if filters.get("severity"):
+            sevs = {s.upper() for s in _as_list(filters["severity"])}
+            dicts = [d for d in dicts if d["severity"] in sevs]
+        states = geo.resolve_state_filter(_as_list(filters.get("state")), filters.get("region"))
+        if states:
+            dicts = [d for d in dicts if d.get("state") in states]
+        if filters.get("min_risk"):
+            dicts = [d for d in dicts if d["risk_score"] >= int(filters["min_risk"])]
+    if sort_by in ("frp", "frp_mw"):
+        dicts.sort(key=lambda d: d.get("peak_frp_mw") or 0, reverse=True)
+    else:
+        dicts.sort(key=lambda d: d.get("risk_score", 0), reverse=True)
+    return dicts[:limit]
+
+
+def get_event(event_id: str) -> dict | None:
+    events = _events_cached(db_signature())
+    for e in events:
+        if e.event_id == event_id:
+            return _event_to_dict(e)
+    return None
+
+
+def get_event_for_alert(alert_id: str) -> dict | None:
+    events = _events_cached(db_signature())
+    for e in events:
+        if alert_id in e.alert_ids:
+            return _event_to_dict(e)
+    return None
+
+
+def get_event_fingerprint(event_id: str) -> dict | None:
+    from src.intelligence.fingerprint import compute_fingerprint
+    events = _events_cached(db_signature())
+    for e in events:
+        if e.event_id == event_id:
+            return compute_fingerprint(_get_event_observations(e))
+    return None
+
+
+def get_event_evidence(event_id: str) -> dict | None:
+    from src.intelligence.evidence import build_evidence
+    events = _events_cached(db_signature())
+    for e in events:
+        if e.event_id == event_id:
+            return build_evidence(e, _get_event_observations(e))
+    return None
+
+
+def get_event_evolution(event_id: str) -> dict | None:
+    from src.intelligence.evolution import build_evolution
+    events = _events_cached(db_signature())
+    for e in events:
+        if e.event_id == event_id:
+            return build_evolution(_get_event_observations(e))
+    return None
+
+
+def get_event_trajectory(event_id: str) -> dict | None:
+    from src.intelligence.early_warning import compute_trajectory
+    evo = get_event_evolution(event_id)
+    if not evo:
+        return None
+    return compute_trajectory(evo["frames"])
+
+
+def find_increasing_risk_events(limit: int = 10) -> list[dict]:
+    events = _events_cached(db_signature())
+    result = []
+    for e in events:
+        traj = get_event_trajectory(e.event_id)
+        if traj and traj.get("trajectory") == "INCREASING":
+            d = _event_to_dict(e)
+            d["trajectory"] = traj
+            result.append(d)
+    result.sort(key=lambda x: x.get("risk_score", 0), reverse=True)
+    return result[:limit]
+
+
+def events_situation() -> dict:
+    """Summary counts for the event layer (Command Center KPIs)."""
+    events = _events_cached(db_signature())
+    total = len(events)
+    high_risk = sum(1 for e in events if e.risk_score >= 60)
+    persistent = sum(1 for e in events if e.observation_count >= 3)
+    early_warn = 0
+    for e in events:
+        traj = get_event_trajectory(e.event_id)
+        if traj and traj.get("state") in ("EARLY WARNING", "HIGH PRIORITY"):
+            early_warn += 1
+    return {
+        "total_events": total,
+        "high_risk_events": high_risk,
+        "persistent_sources": persistent,
+        "early_warnings": early_warn,
+    }
+
+
 def clear_caches() -> None:
     _load_alerts_cached.cache_clear()
+    _events_cached.cache_clear()
     data_date_range.cache_clear()
     _india_facilities.cache_clear()
     incidents.cache_clear()
