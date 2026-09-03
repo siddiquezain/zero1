@@ -13,15 +13,21 @@ Visual states
 """
 from __future__ import annotations
 
+import base64
 import datetime as _dt
 import html as _html
 import re
 import time as _time
+from pathlib import Path
 
 import streamlit as st
 
 from dashboard import data, state
 from dashboard.components import ui
+
+_AGENT_IMG_B64 = "data:image/webp;base64," + base64.b64encode(
+    (Path(__file__).parent.parent / "static" / "agent-bot.webp").read_bytes()
+).decode()
 
 _EXAMPLES = [
     "Show all critical alerts",
@@ -34,7 +40,7 @@ _EXAMPLES = [
     "Generate report for high-risk incidents",
 ]
 
-_AGENT_IMG = "/app/static/agent-bot.webp"
+_AGENT_IMG = _AGENT_IMG_B64
 _STAGE_H = 214
 _THINK_FLOOR_S = 0.85
 

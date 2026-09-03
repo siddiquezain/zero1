@@ -8,6 +8,7 @@ import streamlit as st
 from dashboard import data, state
 from dashboard import theme as T
 from dashboard.agent import panel as agent_panel
+from dashboard.agent.panel import _AGENT_IMG_B64 as _AGENT_IMG
 from src.ingestion.refresh import _age_hours as _firms_age_hours
 from src.ingestion.config import FIRMS_MAP_KEY
 
@@ -61,7 +62,7 @@ def sidebar_agent_card() -> None:
     st.markdown(
         '<div class="panel" style="padding:10px 12px">'
         '<div style="display:flex;align-items:center;gap:10px">'
-        '<img src="/app/static/agent-bot.webp" style="width:40px;height:40px;'
+        f'<img src="{_AGENT_IMG}" style="width:40px;height:40px;'
         'object-fit:contain;border-radius:7px;transform:scaleX(-1);flex:none">'
         '<div>'
         '<div style="font-size:11.5px;font-weight:700">Fire Intelligence Agent</div>'
