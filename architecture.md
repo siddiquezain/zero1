@@ -58,13 +58,15 @@ engines. This keeps a future React/FastAPI frontend a frontend-only project.
 - Auto-seed guard: on first run, if `data/alerts.db` is absent,
   `src.alerting.pipeline.run(fresh=True)` is called.
 
-### Target **[PLANNED]**
+### Target **[IMPLEMENTED]**
 
 ```
 dashboard/
   app.py              shell: st.set_page_config → theme, st.navigation, shell
                       header (system id, live clock, "⌘ Fire Intelligence"),
-                      agent panel mount, auto-seed guard.
+                      agent panel mount, auto-seed guard. Calls
+                      data.maybe_refresh() at startup; shows st.toast on
+                      refresh or error.
   theme.py            the CSS design-system block (moved verbatim) + page config.
                       Single source; injected once per page.
   state.py            session_state defaults + typed get/set helpers for the
@@ -74,6 +76,8 @@ dashboard/
                                   near_facility_type, max_dist_facility_km,
                                   min_risk}
                         focus_alert_id, active_page, agent_history
+  data.py             maybe_refresh() wrapper: calls src/ingestion/refresh.py,
+                      clears Streamlit cache on successful refresh.
   components/          pure renderers, NO business logic, NO src.alerting import:
     situation_header.py   from the "intel-bar" block
     alert_row.py          from _alert_row_html / _alert_detail_html / _sev_section_head
@@ -86,8 +90,20 @@ dashboard/
   agent/
     panel.py           command-palette dialog (st.dialog) + chat input +
                        result-card rendering + ui_action application
+  shell.py            topbar badge: green "LIVE NRT" when FIRMS_MAP_KEY set +
+                      data < 2h old; amber "NRT SNAPSHOT" otherwise.
+                      sidebar_refresh_card() renders "FIRMS NRT Feed" card +
+                      "↻ Refresh Data" button (shown only when FIRMS_MAP_KEY set);
+                      age label: "just now / Xh ago / X days ago".
   timeline.py          unchanged
 ```
+
+On startup, `app.py` calls `data.maybe_refresh()` which calls
+`src/ingestion/refresh.py`. If `FIRMS_MAP_KEY` is set and `MAX(acq_date)` in
+`alerts.db` is > 2h ago, fetches fresh VIIRS+MODIS NRT, feature-engineers India
+rows (lightweight), runs `stage6_model.joblib`, rewrites
+`stage6_india_scores.parquet`, reseeds `alerts.db`. Sidebar shows "FIRMS NRT
+Feed" card with "↻ Refresh Data" button when key is set.
 
 - **Navigation:** `st.navigation` with explicit `st.Page` objects (this disables
   Streamlit's implicit `pages/` auto-discovery, so the folder name is safe).
@@ -218,7 +234,7 @@ runtime.ask(message, context)          context = {current_page, active_filters}
 |---|---|
 | `tools.py` | The **read-only tool registry**: JSON-schema definitions mapping 1:1 to `queries.*` + `actions.export_geojson/export_csv/build_incident_report`. **No state-changing tool is registered.** One registry, consumed by both runtimes. |
 | `deterministic.py` | Regex/keyword intent + entity extraction: severity words, class words, state/region names (from `geo.REGIONS`), timeframe ("today", "last N days"), ranking verbs ("highest", "top N"), "near facility". Produces a tool call. Must cover every documented example prompt. **Guaranteed baseline.** |
-| `claude.py` | Anthropic SDK tool-use loop, model `claude-sonnet-5`, same registry. **Guarded/optional import** — `import anthropic` failure or missing key ⇒ this runtime is simply unavailable, not an error. |
+| `claude.py` | Anthropic SDK tool-use loop, model `claude-sonnet-4-6`, same registry. **Guarded/optional import** — `import anthropic` failure or missing key ⇒ this runtime is simply unavailable, not an error. |
 | `runtime.py` | `ask()` — selects runtime, dispatches tool calls, assembles `AgentReply`. `AgentReply = { text, tool_calls, result_cards, ui_action }`. **No `pending_confirmation` / mutation path this round.** |
 | `response.py` | Deterministic NL formatting of tool results — used directly in offline mode and as the fallback formatter for the Claude path. |
 
@@ -246,7 +262,7 @@ runtime.ask(message, context)          context = {current_page, active_filters}
 
 | Artefact | Format | Committed? | Used by |
 |---|---|---|---|
-| `data/processed/stage6_india_scores.parquet` | Parquet (705 scored India detections) | Yes | `pipeline`, `queries` |
+| `data/processed/stage6_india_scores.parquet` | Parquet (1105 scored India detections; live-refreshable via `src/ingestion/refresh.py`) | Yes | `pipeline`, `queries` |
 | `data/incidents/stage7_incident_scores.parquet` | Parquet (30 incidents) | Yes | Incidents / Analytics / `queries` |
 | `data/processed/facilities.parquet` | Parquet (72,624; cols `facility_id,lat,lon,facility_type,source,name,country`) | Yes | Facilities / `queries` |
 | `data/incidents/confirmed_incidents_india.csv` | CSV (30) | Yes | scoring, case studies |
@@ -272,10 +288,12 @@ breakdown + the resolved state** — it is not a stored entity.
 - **Training** (`src/model/`) — RandomForest, global data, India held out, spatial
   grid split, VNF-oracle labelling. Not re-run this round. Details in `context.md`
   §7 and `reports/stage6_evaluation.txt`.
-- **Serving** — the dashboard does **not** load the model. Class + probability +
-  `anomaly_flag` are already in `stage6_india_scores.parquet`; the rule-based
-  `risk_engine` derives class/severity/context/narrative at load time via
-  `score_dataframe`.
+- **Serving** — for static committed data, the dashboard does not load the model
+  (class + probability + `anomaly_flag` are already in
+  `stage6_india_scores.parquet`; the rule-based `risk_engine` derives
+  class/severity/context/narrative at load time via `score_dataframe`). For live
+  FIRMS refresh (`FIRMS_MAP_KEY` set), `src/ingestion/refresh.py` loads
+  `stage6_model.joblib` to score fresh detections.
 - **Anomaly rule** — `max(prob) < 0.55` → Industrial Fire / Abnormal Thermal
   Event.
 
@@ -351,7 +369,7 @@ From `.env` (see `.env.example`) via `python-dotenv`:
 
 | Variable | Purpose | Required? |
 |---|---|---|
-| `FIRMS_MAP_KEY` | NASA FIRMS ingestion (pipeline only) | pipeline only |
+| `FIRMS_MAP_KEY` | NASA FIRMS ingestion + dashboard runtime live refresh | pipeline + dashboard runtime (live refresh) |
 | `EARTHDATA_USERNAME` / `EARTHDATA_PASSWORD` | ORNL DAAC / VNF downloads (pipeline only) | pipeline only |
 | `INDIA_BBOX` | India bounding box | has default |
 | `FIRMS_NRT_DAYS` | NRT window | has default |
@@ -372,7 +390,7 @@ the committed data.
 - `anthropic>=0.40` added to `requirements.txt` as an optional/guarded import
   (its absence must not break `pip install` expectations for the offline path —
   it installs, but is only imported lazily inside `claude.py`).
-- Model id: `claude-sonnet-5`.
+- Model id: `claude-sonnet-4-6`.
 - Any failure ⇒ silent fallback to deterministic + the offline note.
 
 ## 14. Deterministic offline fallback

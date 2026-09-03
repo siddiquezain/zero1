@@ -82,8 +82,11 @@ floating · generic 4-KPI-card grids.
 ### Motion
 
 Subtle and purposeful only: 120–250 ms micro-transitions on hover, selection,
-expand/collapse, panel open. Respect reduced-motion. The one existing "live" pulse
-dot on the status indicator is acceptable; do not add more.
+expand/collapse, panel open. Respect reduced-motion. The topbar data-recency
+indicator has two states: green "LIVE NRT" (FIRMS_MAP_KEY set and data < 2h old)
+and amber "NRT SNAPSHOT" (stale or no key). When FIRMS_MAP_KEY is configured, the
+sidebar shows a "FIRMS NRT Feed" card with a "↻ Refresh Data" button. Do not add
+further animated indicators.
 
 ### Iconography
 
@@ -129,8 +132,11 @@ Limitations        — honest caveats
 
 - Nav shows active state, hover state, is keyboard-navigable.
 - The shell header carries: system id (`SIH · 26162 · India Fire Intelligence`),
-  a live IST clock + data-recency indicator, and a single **"⌘ Fire Intelligence"**
-  entry point for the agent.
+  a live IST clock + data-recency indicator (green "LIVE NRT" when FIRMS_MAP_KEY
+  is set and data is < 2h old; amber "NRT SNAPSHOT" otherwise), and a single
+  **"⌘ Fire Intelligence"** entry point for the agent. When FIRMS_MAP_KEY is
+  present, the sidebar also shows a "FIRMS NRT Feed" card with a "↻ Refresh Data"
+  button.
 - Global filters (severity / status / date / classification / region) live in
   shared state and persist across sections. A filter set by the agent looks
   identical to one set by hand.
@@ -320,8 +326,9 @@ secondary actions · what's prioritised · how to move on.
   - a concise natural-language response grounded in real data;
   - **result cards** — each with a title/subtitle and up to three actions:
     **Open Investigation**, **Show on Map**, **Generate Report**;
-  - when running without an API key, a quiet "Local intelligence mode" note
-    (offline deterministic parser) — the agent still works fully.
+  - a mode indicator: **"CLAUDE"** (blue, `#3d7dc8`) when `ANTHROPIC_API_KEY` is
+    set and `claude-sonnet-4-6` is used; **"LOCAL"** (amber) when the offline
+    deterministic parser is active. Previously a static "ONLINE" badge.
 - **Primary actions:** ask a question; click a result-card action (which applies
   shared filters / navigates / focuses the map / opens an investigation /
   produces a report).

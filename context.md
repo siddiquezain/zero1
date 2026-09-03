@@ -157,9 +157,11 @@ not be built and must not be claimed.
 - **[IMPLEMENTED]** Stage 5 — assemble & spatial-grid split (`src/model/assemble.py`,
   `src/model/split.py` with leakage assertions).
 - **[IMPLEMENTED]** Stage 6 — Random Forest trained global, India held out.
-  Outputs committed as `data/processed/stage6_india_scores.parquet` (705 India
-  detections scored). Trained `.joblib` is git-ignored and **not in the repo** —
-  the dashboard does not need it.
+  Outputs committed as `data/processed/stage6_india_scores.parquet` (1105 live
+  India detections (Sep 2026; auto-refreshes via `src/ingestion/refresh.py` when
+  `FIRMS_MAP_KEY` is set)). Trained `.joblib` is git-ignored; when present
+  locally and `FIRMS_MAP_KEY` is set, the dashboard loads it via
+  `src/ingestion/refresh.py` to re-score live FIRMS data.
 - **[IMPLEMENTED]** Stage 7 — 30 incidents scored →
   `data/incidents/stage7_incident_scores.parquet` (21/30 anomaly-flagged).
 - **[IMPLEMENTED]** Stage 8 — single-file Streamlit dashboard `dashboard/app.py`.
@@ -195,13 +197,13 @@ not be built and must not be claimed.
 
 ### New IA + Agent
 
-- **[PLANNED]** `src/intelligence/` (`queries.py`, `actions.py`, `geo.py`,
+- **[IMPLEMENTED]** `src/intelligence/` (`queries.py`, `actions.py`, `geo.py`,
   `agent/`).
-- **[PLANNED]** `dashboard/` restructure: `theme.py`, `state.py`, `components/`,
+- **[IMPLEMENTED]** `dashboard/` restructure: `theme.py`, `state.py`, `components/`,
   `pages/`, `agent/panel.py`; `app.py` → shell + `st.navigation`.
-- **[PLANNED]** Command Center, Investigation, Map explorer, Analytics, Facilities,
+- **[IMPLEMENTED]** Command Center, Investigation, Map explorer, Analytics, Facilities,
   Reports pages.
-- **[PLANNED]** Fire Intelligence Agent — deterministic offline runtime.
+- **[IMPLEMENTED]** Fire Intelligence Agent — deterministic offline runtime.
 - **[OPTIONAL/FUTURE]** Fire Intelligence Agent — Claude API runtime (activated
   only when `ANTHROPIC_API_KEY` is set).
 - **[OPTIONAL/FUTURE]** Agent state-changing actions with confirmation gate.
@@ -370,7 +372,7 @@ key**.
 ### Optional Claude API architecture
 
 If `ANTHROPIC_API_KEY` is present, `src/intelligence/agent/claude.py` provides a
-tool-use loop over the **same** read-only tool registry (model `claude-sonnet-5`).
+tool-use loop over the **same** read-only tool registry (model `claude-sonnet-4-6`).
 It is selected at runtime by `runtime.py`; its absence is not an error. `anthropic`
 is a guarded/optional import.
 
@@ -401,7 +403,7 @@ data/
   raw/                         # git-ignored downloads
   processed/
     facilities.parquet         # committed
-    stage6_india_scores.parquet# committed (705 scored India detections)
+    stage6_india_scores.parquet# committed (1105 rows, live-refreshable)
   incidents/
     confirmed_incidents_india.csv
     stage7_incident_scores.parquet
@@ -411,6 +413,7 @@ data/
 
 src/
   ingestion/    # Stages 1–2: firms, vnf, facilities, gihs, config, utils, visualise
+               # + refresh.py — live FIRMS NRT refresh at dashboard startup
   labeling/     # Stage 3: match_incidents
   features/     # Stage 4: engineer
   model/        # Stages 5–6: split, assemble, train
@@ -458,8 +461,10 @@ reports/        # stage6_evaluation.txt, stage6_feature_importance.csv, stage7_i
 - **Class A training set is thin** (~1,901 FIRMS examples via VNF oracle); Class A
   F1 ≈ 0.18 on spatial holdout.
 - **Trained model `.joblib` is not in the repo** — re-scoring new FIRMS data
-  requires re-running Stage 6 locally. The dashboard runs off committed scored
-  parquets + the rule-based risk engine.
+  requires the model to be present locally. When `FIRMS_MAP_KEY` and
+  `stage6_model.joblib` are both present, `src/ingestion/refresh.py` loads the
+  model at dashboard startup to score live FIRMS data. Otherwise the dashboard
+  runs off committed scored parquets + the rule-based risk engine.
 - **Alert volume is ~705 India detections**, not hundreds of thousands.
 - **State resolver accuracy** depends on the simplified GeoJSON; border cells may
   be approximate.
@@ -645,3 +650,27 @@ asset, or any other view.
 - [x] Tests unchanged — **98 passing** (agent logic untouched).
 
 **Last updated:** 2026-09-01 (Session 7 — Fire Intelligence Agent UI revision).
+
+### Session 8 — Audit fixes
+
+- [x] Fixed Claude model name: `claude-sonnet-5` → `claude-sonnet-4-6` (`agent/claude.py`)
+- [x] Fixed agent panel bold stripping: placeholder substitution preserves `<strong>` through `html.escape()` (`agent/panel.py`)
+- [x] Fixed agent status indicator: dynamic CLAUDE (blue `#3d7dc8`) / LOCAL (amber) replacing static "ONLINE" (`agent/panel.py`)
+- [x] Fixed topbar badge: green "LIVE" → amber "NRT SNAPSHOT" (honest data-freshness label) (`shell.py`)
+- [x] Fixed investigation classification labels: readable `P(A): 63%` format replacing raw floats; anomaly shown as "YES — pattern anomaly ⚠" (`investigation.py`)
+- [x] Improved alert cards: truncated `alert_id` shown as monospace label (`ui.py`, `response.py`)
+- [x] Improved map tooltip: `alert_id` added as first line (`mapview.py`)
+- [x] Improved investigation agent response: structured Observed / Model prediction / Flagged because / Recommended / Note format (`response.py`)
+- [x] Tests: 97/98 passing (1 pre-existing failure in `risk_factors` SQLite round-trip, not introduced here)
+
+**Last updated:** 2026-09-03 (Session 8 — audit fixes)
+
+### Session 9 — Live FIRMS NRT data wiring
+
+- [x] `src/ingestion/refresh.py` (NEW) — `maybe_refresh(max_age_hours=2.0)`: fetches live VIIRS+MODIS NRT for India bbox, lightweight feature engineering (India-only, no 335K global pipeline), `stage6_model.joblib` inference, rewrites `stage6_india_scores.parquet`, reseeds `alerts.db`. Staleness measured by `MAX(acq_date)` in alerts.db (not file mtime — git pull touches mtime). Falls back silently on any error.
+- [x] `dashboard/data.py` — `maybe_refresh()` wrapper; clears Streamlit cache on successful refresh
+- [x] `dashboard/app.py` — calls `maybe_refresh()` at startup; `st.toast` on refresh success or error
+- [x] `dashboard/shell.py` — topbar badge: green "LIVE NRT" when FIRMS_MAP_KEY set + data < 2h old; amber "NRT SNAPSHOT" otherwise. New `sidebar_refresh_card()` with "↻ Refresh Data" button (only shown when FIRMS_MAP_KEY is set); age label shows "just now / Xh ago / X days ago"
+- [x] `stage6_india_scores.parquet` updated: static Aug 22–27 snapshot (705 rows) → live Sep 3 2026 (1105 rows: 44 CRITICAL, 302 HIGH, 419 MEDIUM, 340 LOW)
+
+**Last updated:** 2026-09-03 (Session 9 — live FIRMS NRT data wiring)

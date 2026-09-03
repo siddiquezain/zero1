@@ -36,8 +36,9 @@ row within 5 km of a known VIIRS Nightfire gas-flare site is labelled `"A"`, eve
 other global FIRMS row is labelled `"B_candidate"`. The model uses **7 numeric
 features**, all available at India inference time. It is evaluated three ways
 (random split, spatial-grid holdout, India geographic holdout). The finalised
-**spatial-holdout model** then scores **705 held-out India FIRMS hotspots** →
-`stage6_india_scores.parquet`, adding `predicted_label`, `prob_A`,
+**spatial-holdout model** then scores **1105 India FIRMS hotspots** →
+`stage6_india_scores.parquet` (live Sep 2026 data; refreshes via
+`src/ingestion/refresh.py`), adding `predicted_label`, `prob_A`,
 `prob_B_candidate`, and `anomaly_flag` (`max(prob) < 0.55`). The dashboard's
 **third** class — "Industrial Fire / Abnormal Thermal Event" — is **not a model
 output**; it is derived downstream from `anomaly_flag` by the rule-based risk
@@ -376,8 +377,21 @@ The rest of the row is the Stage 4 feature record (`lat`, `lon`, `bt_kelvin`,
 `agri_season_flag`, `day_night` / `day_night_bin`, `acq_date`, `acq_month`,
 `confidence`, `spatial_grid_id`, …).
 
-**This committed parquet is the only model output the dashboard consumes.** The
-dashboard never loads `stage6_model.joblib`.
+The committed parquet is the baseline the dashboard consumes. When `FIRMS_MAP_KEY`
+and `stage6_model.joblib` are both present, `src/ingestion/refresh.py` replaces
+it with live-scored data at startup.
+
+### Live inference path (dashboard runtime)
+
+When `FIRMS_MAP_KEY` is set, `src/ingestion/refresh.py` runs fresh inference at
+dashboard startup: fetches VIIRS+MODIS NRT for the India bbox (last 5 days),
+constructs the same 7 feature columns (`persistence_count` from ~1 km grid-key
+groupby, facility proximity via BallTree against `facilities.parquet`,
+`agri_season_flag`, `day_night_bin`), calls `pipe.predict` +
+`pipe.predict_proba` on `stage6_model.joblib`, writes new
+`stage6_india_scores.parquet`, reseeds `alerts.db` via `pipeline.run(fresh=True)`.
+The model must be present locally (git-ignored). Falls back to existing data if
+the model is absent or any step fails.
 
 ---
 
@@ -478,7 +492,9 @@ satellite-omission finding, not discarded.
    `agri_season_flag` / `acq_month` carry no signal in the current window.
 7. **The trained model and Stage 5 parquets are not in the repo.** Re-running
    Stage 6 requires regenerating Stages 1–5 locally. The dashboard runs entirely
-   off `stage6_india_scores.parquet` + the rule-based risk engine.
+   off `stage6_india_scores.parquet` + the rule-based risk engine. When
+   `stage6_model.joblib` is present locally, the dashboard can re-score live
+   FIRMS data via `src/ingestion/refresh.py`.
 8. **Split shuffle uses a fixed seed (42)** but depends on regenerating the
    identical Stage 4 table; exact row counts are only guaranteed via the
    committed reports, not reproducible from the repo alone.

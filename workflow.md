@@ -27,6 +27,11 @@ Parquet outputs are what the app reads.
   `india_holdout`) **at ingest time**.
 - Limitation: FIRMS NRT covers only ~5 days; no historical archive.
 
+**Dashboard-triggered live refresh [IMPLEMENTED]:** `src/ingestion/refresh.py`
+fetches fresh FIRMS NRT on every dashboard startup (when `FIRMS_MAP_KEY` is set).
+Staleness is checked by querying `MAX(acq_date)` from `alerts.db`; if > 2h old,
+fresh data is fetched and the store reseeded.
+
 ### 2. FIRMS / thermal-anomaly ingestion **[AUTOMATED] [IMPLEMENTED]**
 
 - Raw CSV/Parquet written to `data/raw/`; row counts logged; leakage guard
@@ -83,7 +88,9 @@ These are **model inputs, never labels.**
 - `pipeline.run()` inserts non-duplicate rows into `data/alerts.db` with an
   initial status by severity (CRITICAL/HIGH → `ALERTED`, MEDIUM → `VALIDATING`,
   else `DETECTED`).
-- On first app launch the store auto-seeds if `alerts.db` is absent.
+- On first app launch the store auto-seeds if `alerts.db` is absent. On every
+  launch, if data is stale (latest `acq_date` > 2h ago) and `FIRMS_MAP_KEY` is
+  set, `src/ingestion/refresh.py` reseeds with live FIRMS data.
 
 ### Incident evaluation set **[AUTOMATED] [IMPLEMENTED]** (`src/scoring/`)
 
@@ -95,7 +102,9 @@ These are **model inputs, never labels.**
 
 ## Part 2 — Serving & interaction workflow
 
-Everything below runs in the Streamlit app against the committed data + `alerts.db`.
+Everything below runs in the Streamlit app against the committed data + `alerts.db`
+(or live-refreshed data when `FIRMS_MAP_KEY` is set and `stage6_model.joblib` is
+present).
 
 ### 10. Geographic visualisation **[AUTOMATED render / [MANUAL] explore] [IMPLEMENTED map, PLANNED page]**
 
@@ -144,7 +153,11 @@ The analyst then decides — see journey B.
   counts, repeat counts, max risk, historical activity.
 - **Pipeline re-run** — manual "Re-run" reseeds `alerts.db` from the scored data.
 
-### 13. Fire Intelligence Agent workflow **[AGENT-ASSISTED, READ-ONLY] [PLANNED / OPTIONAL]**
+### 13. Fire Intelligence Agent workflow **[AGENT-ASSISTED, READ-ONLY] [IMPLEMENTED / OPTIONAL]**
+
+The agent mode indicator shows **"CLAUDE"** (blue, `#3d7dc8`) when
+`ANTHROPIC_API_KEY` is set and `claude-sonnet-4-6` is used, or **"LOCAL"** (amber)
+when the offline deterministic parser is active. Previously a static "ONLINE" badge.
 
 ```
 Analyst opens "⌘ Fire Intelligence" (command palette) on any page
@@ -294,7 +307,8 @@ Notation: **[A]** automated system action · **[M]** manual analyst action ·
 | Classification + anomaly flag | ✅ | | |
 | Persistence detection | ✅ | | |
 | Risk scoring + severity + alert creation | ✅ | | |
-| Store seeding / auto-seed on first run | ✅ | ✅ (Re-run) | |
+| Store seeding / auto-seed on first run | ✅ | ✅ (Re-run / ↻ Refresh Data) | |
+| Live FIRMS NRT refresh (startup + manual button) | ✅ | ✅ | |
 | Investigation assembly | ✅ | | |
 | Browsing / filtering / navigating | | ✅ | ✅ |
 | Focusing the map | | ✅ | ✅ |
