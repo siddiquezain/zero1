@@ -104,6 +104,57 @@ def DATE_RANGE():               return date_range(_sig())
 def outside_india():            return _outside(_sig())
 def geo_audit():                return _audit(_sig())
 
+# ── event queries ────────────────────────────────────────────────────────────
+@st.cache_data(ttl=30, show_spinner=False)
+def events(_sig: float, filters: dict | None, sort_by: str, limit: int) -> list[dict]:
+    return queries.list_events(filters, sort_by=sort_by, limit=limit)
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def event(_sig: float, event_id: str) -> dict | None:
+    return queries.get_event(event_id)
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def event_for_alert(_sig: float, alert_id: str) -> dict | None:
+    return queries.get_event_for_alert(alert_id)
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def event_fingerprint(_sig: float, event_id: str) -> dict | None:
+    return queries.get_event_fingerprint(event_id)
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def event_evidence(_sig: float, event_id: str) -> dict | None:
+    return queries.get_event_evidence(event_id)
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def event_evolution(_sig: float, event_id: str) -> dict | None:
+    return queries.get_event_evolution(event_id)
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def event_trajectory(_sig: float, event_id: str) -> dict | None:
+    return queries.get_event_trajectory(event_id)
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def events_situation(_sig: float) -> dict:
+    return queries.events_situation()
+
+
+def EVENTS(filters=None, sort_by="risk_score", limit=500):
+    return events(_sig(), filters, sort_by, limit)
+def EVENT(event_id: str):             return event(_sig(), event_id)
+def EVENT_FOR_ALERT(alert_id: str):   return event_for_alert(_sig(), alert_id)
+def EVENT_FP(event_id: str):          return event_fingerprint(_sig(), event_id)
+def EVENT_EV(event_id: str):          return event_evidence(_sig(), event_id)
+def EVENT_EVO(event_id: str):         return event_evolution(_sig(), event_id)
+def EVENT_TRAJ(event_id: str):        return event_trajectory(_sig(), event_id)
+def EVENTS_SIT():                     return events_situation(_sig())
+
 
 # ── mutations (manual UI only) ─────────────────────────────────────────────
 def set_status(alert_id: str, action: str) -> dict:
