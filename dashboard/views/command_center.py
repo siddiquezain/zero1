@@ -54,6 +54,19 @@ def render() -> None:
 
         st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
 
+        # ── Event KPI row ──────────────────────────────────────────────────
+        es = data.EVENTS_SIT()
+        ek = st.columns(4, gap="small")
+        with ek[0]:
+            ui.kpi(es["total_events"], "Thermal Events", "clustered detections", icon="⬡")
+        with ek[1]:
+            ui.kpi(es["high_risk_events"], "High-Risk Events", "risk ≥ 60", color=T.HIGH)
+        with ek[2]:
+            ui.kpi(es["persistent_sources"], "Persistent Sources", "≥3 observations", color=T.MED)
+        with ek[3]:
+            ui.kpi(es["early_warnings"], "Early Warnings", "trajectory increasing", color=T.CRIT)
+        st.markdown('<div style="height:6px"></div>', unsafe_allow_html=True)
+
         # ── map + priority alerts ─────────────────────────────────────────
         m, p = st.columns([1.55, 1], gap="medium")
         with m:
