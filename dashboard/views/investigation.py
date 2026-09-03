@@ -382,12 +382,47 @@ def render() -> None:
         f'<div style="font-size:11.5px;color:{T.T1};line-height:1.6">{ra["reason"]}</div></div>',
         unsafe_allow_html=True,
     )
+    current_status = h["status"]
+    _STATUS_DONE = {"MONITORING", "ESCALATED", "EXTINGUISHED"}
+    st.markdown(
+        f'<div style="font-size:11px;color:{T.T2};margin-bottom:6px">'
+        f'Current status: <span style="font-weight:700;color:{T.T0}">{current_status}</span></div>',
+        unsafe_allow_html=True,
+    )
     b1, b2, b3, b4 = st.columns(4)
-    if b1.button("Acknowledge", use_container_width=True, key="inv_ack"):
-        data.set_status(aid, "acknowledge"); st.rerun()
-    if b2.button("Escalate", use_container_width=True, key="inv_esc"):
-        data.set_status(aid, "escalate"); st.rerun()
-    if b3.button("Resolve", use_container_width=True, key="inv_res"):
-        data.set_status(aid, "resolve"); st.rerun()
+    if b1.button(
+        "✓ Acknowledged" if current_status == "MONITORING" else "Acknowledge",
+        use_container_width=True, key="inv_ack",
+        disabled=current_status in _STATUS_DONE,
+    ):
+        r = data.set_status(aid, "acknowledge")
+        if r.get("ok"):
+            st.toast("Status updated → MONITORING (Acknowledged)", icon="✅")
+        else:
+            st.toast(f"Error: {r.get('error', 'unknown')}", icon="🚨")
+        st.rerun()
+    if b2.button(
+        "↑ Escalated" if current_status == "ESCALATED" else "Escalate",
+        use_container_width=True, key="inv_esc",
+        disabled=current_status == "EXTINGUISHED",
+        type="primary" if current_status not in _STATUS_DONE else "secondary",
+    ):
+        r = data.set_status(aid, "escalate")
+        if r.get("ok"):
+            st.toast("Status updated → ESCALATED", icon="🚨")
+        else:
+            st.toast(f"Error: {r.get('error', 'unknown')}", icon="🚨")
+        st.rerun()
+    if b3.button(
+        "✓ Resolved" if current_status == "EXTINGUISHED" else "Resolve",
+        use_container_width=True, key="inv_res",
+        disabled=current_status == "EXTINGUISHED",
+    ):
+        r = data.set_status(aid, "resolve")
+        if r.get("ok"):
+            st.toast("Status updated → EXTINGUISHED (Resolved)", icon="🟢")
+        else:
+            st.toast(f"Error: {r.get('error', 'unknown')}", icon="🚨")
+        st.rerun()
     if b4.button("Show on map  →", use_container_width=True, key="inv_map"):
         state.request_nav("Map Explorer"); st.rerun()

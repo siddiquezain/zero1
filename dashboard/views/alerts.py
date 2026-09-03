@@ -58,12 +58,19 @@ def render() -> None:
                         unsafe_allow_html=True)
                     if a["status"] not in ("EXTINGUISHED",):
                         b1, b2, b3 = st.columns(3)
-                        if b1.button("Acknowledge", key=f"ack_{a['alert_id']}"):
-                            data.set_status(a["alert_id"], "acknowledge"); st.rerun()
+                        if b1.button("Acknowledge", key=f"ack_{a['alert_id']}",
+                                     disabled=a["status"] == "MONITORING"):
+                            r = data.set_status(a["alert_id"], "acknowledge")
+                            st.toast("Acknowledged → MONITORING" if r.get("ok") else f"Error: {r.get('error')}", icon="✅" if r.get("ok") else "🚨")
+                            st.rerun()
                         if b2.button("Escalate", key=f"esc_{a['alert_id']}"):
-                            data.set_status(a["alert_id"], "escalate"); st.rerun()
+                            r = data.set_status(a["alert_id"], "escalate")
+                            st.toast("Escalated → ESCALATED" if r.get("ok") else f"Error: {r.get('error')}", icon="🚨" if r.get("ok") else "🚨")
+                            st.rerun()
                         if b3.button("Resolve", key=f"res_{a['alert_id']}"):
-                            data.set_status(a["alert_id"], "resolve"); st.rerun()
+                            r = data.set_status(a["alert_id"], "resolve")
+                            st.toast("Resolved → EXTINGUISHED" if r.get("ok") else f"Error: {r.get('error')}", icon="🟢" if r.get("ok") else "🚨")
+                            st.rerun()
 
             pg_cols = st.columns([1, 4, 1])
             if pg_cols[0].button("◀ Prev", key="al_prev", disabled=(page == 0)):
