@@ -128,6 +128,23 @@ def _process(msg: str, context: dict) -> None:
         hist[-1]["pending_nav"] = nav
 
 
+_BOLD_OPEN = "\x00B\x00"
+_BOLD_CLOSE = "\x00/B\x00"
+
+
+def _richtext(raw: str) -> str:
+    """`**bold**` → `<strong>…</strong>`, everything else HTML-escaped.
+
+    Uses a callable `re.sub` replacement — a replacement *template* string
+    cannot contain an `\\xNN` escape (Python's template parser rejects it,
+    which is what crashed the panel on every bot reply)."""
+    marked = re.sub(r"\*\*([^*\n]+)\*\*",
+                    lambda m: f"{_BOLD_OPEN}{m.group(1)}{_BOLD_CLOSE}", raw or "")
+    body = _html.escape(marked)
+    body = body.replace(_BOLD_OPEN, "<strong>").replace(_BOLD_CLOSE, "</strong>")
+    return body.replace("\n", "<br>")
+
+
 def _render_message(m: dict, scope: str, idx: int) -> None:
     if m["role"] == "user":
         st.markdown(
@@ -139,12 +156,7 @@ def _render_message(m: dict, scope: str, idx: int) -> None:
         )
         return
 
-    # Render **bold** preserving tags through html.escape
-    raw = m["text"]
-    raw = re.sub(r'\*\*([^*\n]+)\*\*', r'\x00BOLD\x00\1\x00ENDBOLD\x00', raw)
-    body = _html.escape(raw)
-    body = body.replace('\x00BOLD\x00', '<strong>').replace('\x00ENDBOLD\x00', '</strong>')
-    body = body.replace("\n", "<br>")
+    body = _richtext(m["text"])
 
     mode_icon = "🔷" if m.get("mode") == "claude" else "💡"
     st.markdown(
