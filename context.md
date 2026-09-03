@@ -8,7 +8,6 @@
 > - `design_brief.md` — product identity + UI/UX blueprint per screen
 > - `architecture.md` — technical architecture, modules, interfaces, agent design
 > - `workflow.md` — end-to-end operational workflow and user journeys
-> - `.claude/plans/starry-rolling-pnueli.md` — the approved implementation plan
 
 ---
 
@@ -16,7 +15,7 @@
 
 | | |
 |---|---|
-| **Project name** | India Fire Intelligence Platform (Team ZeroOne) |
+| **Project name** | India Thermal Event Intelligence Platform (Team ZeroOne) |
 | **SIH problem statement** | SIH26162 |
 | **Sponsor / context** | NTRO (National Technical Research Organisation), Smart India Hackathon 2026 |
 | **Official PS title** | "AI-Based Detection and Classification of Industrial Fires and Persistent Thermal Sources Using NASA FIRMS, OSM & Satellite Data" |
@@ -32,6 +31,11 @@ feed offers no prioritisation, no context, and no explanation. There is also no
 existing dataset of confirmed industrial fire incidents anywhere in the world to
 train a direct classifier on.
 
+Raw detections are also point-level: multiple FIRMS pixels from a single burning
+location arrive as separate rows over hours or days, giving no event-level picture
+of how a thermal source is evolving, how persistent it is, or what its behavioural
+pattern implies.
+
 ### Why it matters
 
 Industrial fires near refineries, chemical plants, power stations and mining
@@ -43,14 +47,18 @@ also supports environmental compliance and industrial-activity intelligence.
 ### Core objective
 
 Turn the raw NASA FIRMS thermal feed over India into a prioritised, explained,
-GIS-based operational picture that distinguishes:
+GIS-based operational picture that:
 
-1. **Industrial Fire / Abnormal Thermal Event** — anomalous: matches neither the
-   persistent-industrial nor the natural-fire learned pattern (candidate for human
-   review; *not* a confirmed fire).
-2. **Persistent Industrial Thermal Source** — continuous industrial heat: gas
-   flares, kilns, smelters, thermal power plants.
-3. **Forest / Agricultural Fire** — natural or crop-residue burning.
+1. Clusters detections into **thermal events** (multi-pixel, multi-day).
+2. Characterises each event with a **behaviour fingerprint** (persistence,
+   intensity, nocturnality, spatial stability, industrial proximity, seasonality).
+3. Builds a structured **evidence stack** (supporting / limiting) for every event.
+4. Replays how each event **evolved** over time (milestones + frame-by-frame).
+5. Detects **early-warning trajectories** (risk trend, state: STABLE → HIGH PRIORITY).
+6. Distinguishes detection classes:
+   - **Industrial Fire / Abnormal Thermal Event** — anomalous departure from known patterns.
+   - **Persistent Industrial Thermal Source** — continuous heat: gas flares, kilns, smelters.
+   - **Forest / Agricultural Fire** — natural or crop-residue burning.
 
 ### What the system actually does
 
@@ -64,11 +72,26 @@ GIS-based operational picture that distinguishes:
   assigns a severity (CRITICAL / HIGH / MEDIUM / LOW).
 - Raises alerts into a SQLite store with a lifecycle
   (DETECTED → VALIDATING → ALERTED → ESCALATED → MONITORING → EXTINGUISHED).
+- **Clusters alerts into thermal events** using union-find spatial+temporal
+  grouping (≤15 km, ≤3 days). Each event has a deterministic SHA-256 ID.
+- **Fingerprints** each event across 6 behavioural dimensions, assigning a
+  behaviour category (Persistent Industrial Signature, Recurring Thermal Source,
+  Rapidly Expanding Fire Signature, Seasonal Agricultural Signature, Isolated
+  Thermal Anomaly, Insufficient Evidence).
+- **Builds an evidence stack** — structured SUPPORTING / LIMITING / NEUTRAL items
+  grounded in real observation values.
+- **Replays event evolution** — ordered frame sequence + milestones (First Detection,
+  Persistence Detected, Peak FRP, High-Risk Threshold Crossed).
+- **Computes risk trajectory** — STABLE / WATCH / INCREASING / EARLY WARNING /
+  HIGH PRIORITY from the frame-level risk history.
 - Presents everything on a dark operations dashboard: situation overview, alert
-  feed, India detection map, historical timeline/calendar, classification and
-  model transparency panels, and GIS export (GeoJSON / CSV).
+  feed, event feed, India detection map with event centroid overlay, investigation
+  with full event intelligence panels, and GIS export (GeoJSON / CSV).
 - Scores a curated set of 30 real past Indian industrial incidents as an
   independent evaluation / demo set.
+- Offers a **Fire Intelligence Agent** that reasons over events (not just raw
+  alerts): list events, get fingerprint, evidence, evolution, trajectory, find
+  increasing-risk events.
 
 ### Target users
 
@@ -80,47 +103,56 @@ GIS-based operational picture that distinguishes:
 
 1. **Situational awareness** — "What thermal activity is happening over India
    right now, and how serious is it?"
-2. **Triage** — "Which alerts need attention first?"
-3. **Investigation** — "Why was this specific detection flagged, and what should
-   we do about it?"
-4. **Historical analysis** — "How does today compare to the recent baseline?"
-5. **Facility monitoring** — "What is happening around known industrial sites?"
-6. **Reporting / hand-off** — "Export the current picture for GIS tools or a
+2. **Triage** — "Which events need attention first?"
+3. **Investigation** — "Why was this event flagged, what is its behaviour pattern,
+   and what should we do?"
+4. **Early warning** — "Which events are on an increasing risk trajectory?"
+5. **Historical analysis** — "How does today compare to the recent baseline?"
+6. **Facility monitoring** — "What is happening around known industrial sites?"
+7. **Reporting / hand-off** — "Export the current picture for GIS tools or a
    briefing."
-7. **Natural-language access** — "Ask the platform instead of manually driving
+8. **Natural-language access** — "Ask the platform instead of manually driving
    filters." (Fire Intelligence Agent, read-only.)
 
 ---
 
 ## 2. Scope
 
-### Approved scope (current round — targeting 5 Sept)
+### Approved scope (implemented — as of Session 10)
 
-- **Information-architecture reorganisation** of the existing Streamlit app into
-  clear sections: Command Center, Alerts, Investigation, Map, Analytics,
-  Facilities, Reports / GIS, Model, Limitations. Every existing feature keeps a
-  deliberate home.
-- **`src/intelligence/` service + tool layer** — a framework-agnostic Python layer
-  that both the manual UI and the agent call. No business logic duplicated in the
-  UI.
-- **Offline lat/lon → Indian state / region resolver** (`src/intelligence/geo.py`)
-  using a bundled simplified state-boundary GeoJSON and pure-Python
-  point-in-polygon.
-- **Investigation view** — assembled from existing alert fields only
-  (detection / context / why-flagged / classification / risk breakdown /
-  recommended action).
-- **Facilities view** — new view over the existing `facilities.parquet` joined to
-  detections.
-- **Analytics consolidation** — existing Timeline + Classification content plus a
-  baseline-vs-current FRP comparison (shown only when data supports it).
-- **Reports / GIS page** — existing GeoJSON/CSV export plus a Markdown/CSV incident
-  report.
-- **Fire Intelligence Agent (READ-ONLY)** — natural-language queries, data
-  analysis, filtering, navigation, map focusing, opening investigations, and
-  report generation. Deterministic offline parser is the guaranteed baseline;
-  Claude API is an optional enhancement.
-- Targeted additive change to `src/alerting/risk_engine.py`: expose the risk-score
-  factor breakdown (needed by the Investigation view). No behavioural change.
+- **Thermal Event Clustering** — union-find algorithm groups FIRMS detections into
+  events (≤15 km spatial, ≤3 days temporal). `ThermalEvent` dataclass with 29
+  fields. Deterministic event IDs.
+- **Thermal Behaviour Fingerprinting** — 6-dimension rating (persistence,
+  night_activity, frp_intensity, spatial_stability, industrial_proximity,
+  seasonal_alignment) + 6 behaviour categories.
+- **Evidence Stack / Explainability** — `EvidenceItem` with direction
+  SUPPORTING | LIMITING | NEUTRAL. Always includes system-level FIRMS-resolution
+  and no-ground-truth limiting items. No fabrication.
+- **Event Evolution Replay** — ordered frame sequence (cumulative count, FRP,
+  risk score, lat/lon, day/night) + milestones. Dashboard replay slider.
+- **Early Warning / Risk Trajectory** — STABLE / WATCH / INCREASING / EARLY
+  WARNING / HIGH PRIORITY state from frame-level risk history. Shown on
+  Investigation page with signal breakdown.
+- **Fire Intelligence Agent upgrade** — 8 new event-level read-only tools +
+  event intents in the deterministic parser.
+- **Investigation page upgrade** — event header, fingerprint panel, evidence
+  stack, evolution timeline + replay slider, risk trajectory; all existing panels
+  and manual actions preserved.
+- **Command Center event KPIs** — 4-column event row: Active Events, High-Risk
+  Events, Persistent Sources, Early Warnings.
+- **Alerts page event tab** — DETECTIONS / THERMAL EVENTS tab toggle.
+- **Map Explorer event layer** — "Thermal Events" checkbox overlays amber event
+  centroid ScatterplotLayer.
+- **Information-architecture** — Command Center, Alerts, Investigation, Map,
+  Analytics, Facilities, Reports / GIS, Model, Limitations pages.
+- **`src/intelligence/` service layer** — framework-agnostic Python layer.
+- **Offline lat/lon → Indian state / region resolver** (`src/intelligence/geo.py`).
+- **Fire Intelligence Agent (READ-ONLY)** — deterministic offline parser baseline;
+  optional Claude API enhancement.
+- **Live FIRMS NRT refresh** — `src/ingestion/refresh.py` fetches fresh
+  VIIRS+MODIS, re-scores via the joblib model, reseeds `alerts.db` when
+  `FIRMS_MAP_KEY` is set and data is stale.
 
 ### Explicitly out of scope (this round)
 
@@ -137,16 +169,13 @@ GIS-based operational picture that distinguishes:
 
 ## 3. Implementation status
 
-Legend: **[IMPLEMENTED]** works today · **[PLANNED]** in the approved plan, not
-yet built · **[OPTIONAL/FUTURE]** may be added later · **[NOT SUPPORTED]** will
-not be built and must not be claimed.
+Legend: **[IMPLEMENTED]** works today · **[OPTIONAL/FUTURE]** may be added later · **[NOT SUPPORTED]** will not be built and must not be claimed.
 
 ### Data & ML pipeline
 
 - **[IMPLEMENTED]** Stage 1 — FIRMS NRT ingestion for India + 6 global training
   regions; every row tagged `split` at ingest. VNF gas-flare catalogue (83,641
-  rows). WRI Global Power Plant DB (34,936). OSM industrial polygons (37,688
-  India).
+  rows). WRI Global Power Plant DB (34,936). OSM industrial polygons (37,688 India).
 - **[IMPLEMENTED]** Stage 2 — normalised facility table
   `data/processed/facilities.parquet` (72,624 rows; columns: `facility_id, lat,
   lon, facility_type, source, name, country`).
@@ -158,20 +187,18 @@ not be built and must not be claimed.
   `src/model/split.py` with leakage assertions).
 - **[IMPLEMENTED]** Stage 6 — Random Forest trained global, India held out.
   Outputs committed as `data/processed/stage6_india_scores.parquet` (1105 live
-  India detections (Sep 2026; auto-refreshes via `src/ingestion/refresh.py` when
-  `FIRMS_MAP_KEY` is set)). Trained `.joblib` is git-ignored; when present
-  locally and `FIRMS_MAP_KEY` is set, the dashboard loads it via
-  `src/ingestion/refresh.py` to re-score live FIRMS data.
+  India detections, Sep 2026; auto-refreshes via `src/ingestion/refresh.py` when
+  `FIRMS_MAP_KEY` is set). Trained `.joblib` is git-ignored.
 - **[IMPLEMENTED]** Stage 7 — 30 incidents scored →
   `data/incidents/stage7_incident_scores.parquet` (21/30 anomaly-flagged).
-- **[IMPLEMENTED]** Stage 8 — single-file Streamlit dashboard `dashboard/app.py`.
+- **[IMPLEMENTED]** Stage 8 — multipage Streamlit dashboard.
 
 ### Alerting / intelligence
 
 - **[IMPLEMENTED]** `src/alerting/risk_engine.py` — rule-based scoring →
   `output_class`, `risk_score`, `severity`, `land_cover_context`,
   `hazard_facility_type`, `narrative`, `nearest_city`, `dist_nearest_city_km`,
-  `near_population`.
+  `near_population`, `factors` (additive breakdown).
 - **[IMPLEMENTED]** `src/alerting/alert_store.py` — SQLite store (`data/alerts.db`),
   lifecycle states, `get_alerts()` / `update_status()` / `counts()` / `clear_all()`.
 - **[IMPLEMENTED]** `src/alerting/pipeline.py` — `run(fresh=…)` seeds the store
@@ -179,36 +206,52 @@ not be built and must not be claimed.
 - **[IMPLEMENTED]** `dashboard/timeline.py` — daily severity aggregation and
   range queries over `alerts.db`.
 
-### Dashboard (current, single page)
+### Thermal Event Intelligence (new in Session 10)
 
-- **[IMPLEMENTED]** System/situation header (active count, severity breakdown,
-  class counts).
-- **[IMPLEMENTED]** Control bar — severity / status / date (Today, 24h, 7d,
-  custom) / map-layer / pipeline re-run.
-- **[IMPLEMENTED]** Alert feed — severity-grouped, paginated (5/page),
-  expandable, with Acknowledge / Escalate / Resolve.
-- **[IMPLEMENTED]** India detection map (pydeck + Carto dark) — colour by class or
-  severity, confirmed-incident overlay, tooltips.
-- **[IMPLEMENTED]** Tabs — Timeline (activity strip + calendar + period analysis +
-  playback), GIS Export (GeoJSON / CSV + preview), Classification (3 class panels +
-  land-cover / hazard tables), Incidents (30-incident table + 3 case studies),
-  Model (data sources, three-way evaluation, feature importance), Limitations
-  (5 caveats).
+- **[IMPLEMENTED]** `src/intelligence/clustering.py` — `ThermalEvent` dataclass
+  (29 fields), `cluster_alerts()`, union-find algorithm, deterministic SHA-256
+  event IDs. LRU-cached via `queries._events_cached(_sig)`.
+- **[IMPLEMENTED]** `src/intelligence/fingerprint.py` — `compute_fingerprint()`
+  returning 6-dimension ratings + behaviour_category + 13 total keys.
+- **[IMPLEMENTED]** `src/intelligence/evidence.py` — `EvidenceItem` dataclass,
+  `build_evidence()` returning supporting[], limiting[], neutral[] lists. System-
+  level FIRMS-resolution and no-ground-truth items always present in limiting[].
+- **[IMPLEMENTED]** `src/intelligence/evolution.py` — `build_evolution()` returning
+  frame sequence + milestones (First Detection, Persistence Detected, Peak FRP
+  Observed, High-Risk Threshold Crossed).
+- **[IMPLEMENTED]** `src/intelligence/early_warning.py` — `compute_trajectory(frames)`
+  returning state, trajectory (INCREASING/STABLE/DECREASING), delta, risk_history,
+  signals.
+- **[IMPLEMENTED]** `src/intelligence/queries.py` — extended with 10 event query
+  functions: `list_events`, `get_event`, `get_event_for_alert`,
+  `get_event_fingerprint`, `get_event_evidence`, `get_event_evolution`,
+  `get_event_trajectory`, `find_increasing_risk_events`, `events_situation`.
+  LRU cache keyed on `db_signature()`.
+- **[IMPLEMENTED]** `dashboard/data.py` — 8 `@st.cache_data(ttl=30)` event wrappers:
+  `EVENTS`, `EVENT`, `EVENT_FOR_ALERT`, `EVENT_FP`, `EVENT_EV`, `EVENT_EVO`,
+  `EVENT_TRAJ`, `EVENTS_SIT`.
+- **[IMPLEMENTED]** `src/intelligence/agent/tools.py` — 8 new read-only event tools.
+- **[IMPLEMENTED]** `src/intelligence/agent/deterministic.py` — event ID regex +
+  event intents (event_list, event_detail, event_fingerprint, event_evidence,
+  event_evolution, event_replay, event_trajectory, find_increasing_risk_events).
+  `interpret = parse` alias.
 
-### New IA + Agent
+### Dashboard (current)
 
-- **[IMPLEMENTED]** `src/intelligence/` (`queries.py`, `actions.py`, `geo.py`,
-  `agent/`).
-- **[IMPLEMENTED]** `dashboard/` restructure: `theme.py`, `state.py`, `components/`,
-  `pages/`, `agent/panel.py`; `app.py` → shell + `st.navigation`.
-- **[IMPLEMENTED]** Command Center, Investigation, Map explorer, Analytics, Facilities,
-  Reports pages.
-- **[IMPLEMENTED]** Fire Intelligence Agent — deterministic offline runtime.
-- **[OPTIONAL/FUTURE]** Fire Intelligence Agent — Claude API runtime (activated
-  only when `ANTHROPIC_API_KEY` is set).
-- **[OPTIONAL/FUTURE]** Agent state-changing actions with confirmation gate.
-- **[NOT SUPPORTED]** Agent directly modifying `alerts.db` or any state; LLM
-  issuing raw SQL / arbitrary code; any "confirmed industrial fire" claim.
+- **[IMPLEMENTED]** Command Center — 5-column KPI row + 4-column event KPI row
+  (Active Events, High-Risk Events, Persistent Sources, Early Warnings), live
+  map, top priority alerts, activity strip, agent panel.
+- **[IMPLEMENTED]** Alerts — DETECTIONS tab (existing feed) + THERMAL EVENTS tab
+  (event cards with `EVENT #XXXXXXXX` labels, risk score, observation count).
+- **[IMPLEMENTED]** Investigation — event header (`EVENT #<id>` vs `DETECTION <aid>`),
+  fingerprint panel, evidence stack (supporting/limiting/neutral), evolution
+  timeline + replay slider (per-frame FRP + risk), risk trajectory panel; all
+  existing panels and manual Acknowledge/Escalate/Resolve preserved.
+- **[IMPLEMENTED]** Map Explorer — detection layers + "Thermal Events" checkbox →
+  amber event centroid ScatterplotLayer overlay.
+- **[IMPLEMENTED]** Analytics, Facilities, Reports / GIS, Model, Limitations.
+- **[IMPLEMENTED]** Fire Intelligence Agent — deterministic offline runtime (reads
+  events, fingerprints, evidence, evolution, trajectories); optional Claude API.
 
 ### Existing features that must NOT be removed
 
@@ -224,41 +267,42 @@ India-holdout methodology and leakage checks.
 
 ---
 
-## 4. Final feature set (after this round)
+## 4. Final feature set
 
 | Section | Contents | Status |
 |---|---|---|
-| **Command Center** | Situation overview, KPI row, class + severity summaries, live India map, top-5 priority alerts, 14-day activity strip, quick actions, "View All Alerts" | PLANNED (reuses implemented pieces) |
-| **Alerts** | Full feed: filters, severity grouping, pagination, detail, manual Acknowledge/Escalate/Resolve, per-row "View Investigation" | IMPLEMENTED feed + PLANNED relocation |
-| **Investigation** | Incident header, Detection, Context, Why Flagged, Classification, Risk Assessment (factor breakdown), Recommended Action, manual actions | PLANNED |
-| **Map / GIS** | India detection map, all current layers/controls/interactions, click-to-investigate | IMPLEMENTED map + PLANNED page |
-| **Analytics** | Timeline + calendar + period analysis + playback; classification + severity analysis; baseline-vs-current FRP comparison | IMPLEMENTED + PLANNED baseline |
-| **Facilities** | Known industrial facilities with nearby detections: name, type, state, detection count, repeat count, max risk, historical activity, baseline where available | PLANNED (existing data) |
-| **Reports / GIS** | GeoJSON + CSV export (filter-aware) + preview; Markdown/CSV incident report | IMPLEMENTED export + PLANNED report |
-| **Model** | Real pipeline diagram, data sources, three-way evaluation, feature importance | IMPLEMENTED content + PLANNED page |
-| **Limitations** | FIRMS resolution, satellite revisit, land-cover, temporal/NRT-only, false positives, operational framing | IMPLEMENTED content + PLANNED page |
-| **Fire Intelligence Agent** | Command-palette panel: NL queries, analysis, filtering, navigation, map focus, open investigation, generate report — READ-ONLY | PLANNED (deterministic) + OPTIONAL (Claude) |
+| **Command Center** | Situation KPIs, Event KPIs (4-col), live India map, top priority alerts, 14-day activity strip, quick actions, agent panel | IMPLEMENTED |
+| **Alerts** | DETECTIONS tab (severity-grouped feed, pagination, manual actions) + THERMAL EVENTS tab (event cards) | IMPLEMENTED |
+| **Investigation** | Event header, Detection, Context, Why Flagged, Fingerprint, Evidence Stack, Evolution + Replay, Risk Trajectory, Recommended Action, manual actions | IMPLEMENTED |
+| **Map / GIS** | India detection map, all layers/controls, Thermal Events centroid overlay | IMPLEMENTED |
+| **Analytics** | Timeline + calendar + period analysis + playback; classification + severity analysis; baseline-vs-current | IMPLEMENTED |
+| **Facilities** | Known industrial facilities with nearby detections | IMPLEMENTED |
+| **Reports / GIS** | GeoJSON + CSV export (filter-aware) + preview; incident report | IMPLEMENTED |
+| **Model** | Real pipeline diagram, data sources, three-way evaluation, feature importance | IMPLEMENTED |
+| **Limitations** | FIRMS resolution, satellite revisit, land-cover, temporal/NRT-only, false positives, operational framing | IMPLEMENTED |
+| **Fire Intelligence Agent** | Event-aware NL queries, analysis, filtering, navigation — READ-ONLY | IMPLEMENTED (deterministic) + OPTIONAL (Claude) |
 
 ---
 
-## 5. Final UI information architecture
+## 5. UI information architecture
 
 Navigation follows the operator workflow:
 
 ```
-DETECT → CLASSIFY → VALIDATE → PRIORITIZE → EXPLAIN → ACT
+DETECT → CLUSTER → FINGERPRINT → EVIDENCE → EVOLVE → ACT
 ```
 
 ```
 Shell (system id · live clock · "⌘ Fire Intelligence")
 │
 ├── Command Center      overview: what / how bad / where / what needs attention
-├── Alerts              full prioritised feed + filters + manual actions
-├── Investigation       why one alert matters + recommended action
-├── Map / GIS           where the thermal anomalies are
+│                       + event KPIs: active events / high-risk / persistent / early warnings
+├── Alerts              DETECTIONS tab + THERMAL EVENTS tab
+├── Investigation       event header + fingerprint + evidence + evolution replay + trajectory
+├── Map / GIS           where the thermal anomalies are + event centroid overlay
 ├── Analytics           timeline, calendar, classification/severity, baseline
 ├── Facilities          activity around known industrial infrastructure
-├── Reports / GIS        GeoJSON / CSV export + incident report
+├── Reports / GIS       GeoJSON / CSV export + incident report
 ├── Model               real pipeline + evaluation + feature importance
 └── Limitations         honest caveats
 ```
@@ -277,9 +321,9 @@ on every page — never a full-screen chatbot.
 | WRI Global Power Plant Database | Facility/context layer | IMPLEMENTED |
 | OpenStreetMap `landuse=industrial` (Overpass) | Facility/context layer | IMPLEMENTED |
 | Curated confirmed Indian incidents (news/Wikipedia) | Independent evaluation / demo set (30 rows) | IMPLEMENTED |
-| Simplified India state boundaries GeoJSON | Offline lat/lon → state resolver | PLANNED (bundled in `data/geo/`) |
-| GIHS (Global Industrial Heat Sources) | Additional Class A | NOT SUPPORTED yet (download URL unconfirmed) |
-| MODIS MCD12Q1 / ESA CCI Land Cover raster | Precise land-cover | NOT SUPPORTED yet (coordinate-zone heuristic used instead) |
+| Simplified India admin GeoJSON (`data/geo/india_admin.geojson`) | Offline lat/lon → state/district resolver | IMPLEMENTED (1.2 MB, 36 states + 760 districts) |
+| GIHS (Global Industrial Heat Sources) | Additional Class A | NOT SUPPORTED yet |
+| MODIS MCD12Q1 / ESA CCI Land Cover raster | Precise land-cover | NOT SUPPORTED yet |
 | Historical FIRMS archive (LAADS DAAC) | Temporal incident matching | NOT SUPPORTED yet |
 
 ---
@@ -288,24 +332,22 @@ on every page — never a full-screen chatbot.
 
 - **Global training, India held out.** The classifier learns physical/thermal
   patterns from non-India data; India is a locked geographic holdout for
-  evaluation and deployment only. India data is still used for the facility/context
-  layer, the confirmed-incident set, and the deployed dashboard.
+  evaluation and deployment only.
 - **No random split.** Splitting is by spatial grid / facility to avoid
   repeated-detection leakage. Three accuracy figures are reported side by side
   (random baseline, spatial holdout, India holdout).
 - **VNF is a labelling oracle, not a feature.** FIRMS rows within 5 km of a known
-  VNF flare site → Class A; remaining global FIRMS → `B_candidate`. All training
-  is in FIRMS feature space.
+  VNF flare site → Class A; remaining global FIRMS → `B_candidate`.
 - **Model.** RandomForestClassifier, 7 features: `bt_kelvin`, `frp_mw`,
   `persistence_count`, `dist_nearest_facility_km`, `agri_season_flag`,
-  `day_night_bin`, `acq_month`. Feature importance is dominated by
+  `day_night_bin`, `acq_month`. Feature importance dominated by
   `dist_nearest_facility_km` (0.29), `day_night_bin` (0.25), `bt_kelvin` (0.21).
 - **Anomaly rule.** `max(class probability) < 0.55` → Industrial Fire / Abnormal
-  Thermal Event. This is the actual product demo: real industrial incidents fall
-  outside both learned patterns.
+  Thermal Event.
 - **Risk engine is separate and rule-based** — transparent 0–100 additive score
-  (anomaly flag, FRP bands, persistence, facility proximity, classifier class,
-  FIRMS confidence, night flag, population proximity) → severity bands.
+  → severity bands → stored in `alerts.db`.
+- **Event clustering is in-memory / derived** — no new DB table; events are
+  recomputed from `alerts.db` on cache miss, keyed on DB mtime signature.
 
 ### Hard constraints — do not violate
 
@@ -337,58 +379,50 @@ interaction modes over the *same* backend:
 The agent is an additional interface, never a replacement. It calls the same
 `src/intelligence/` service layer the manual UI uses.
 
-### Capabilities (this round — READ-ONLY)
+### Capabilities (READ-ONLY)
 
-- Answer questions from actual application data ("critical industrial fire alerts
-  today", "persistent sources in Odisha last 7 days", "highest-risk incidents",
-  "compare Odisha and Jharkhand", "why was this classified as industrial fire",
-  "summarise eastern India").
-- Rank / filter / aggregate detections and alerts.
+- Answer questions from actual application data: alerts, events, fingerprints,
+  evidence, evolution, trajectories, facilities, regions, incidents.
+- Rank / filter / aggregate detections, alerts, and events.
+- Find increasing-risk events and early warnings.
 - Apply filters to the shared UI state.
-- Navigate to a section.
-- Focus the existing map (no separate map).
-- Open an Investigation.
+- Navigate to a section; focus the map; open an Investigation.
 - Generate a report via the existing report function.
 - Offer result cards: **Open Investigation**, **Show on Map**, **Generate Report**.
 
 ### Limitations
 
 - **Read-only.** The agent never acknowledges, escalates, resolves, or otherwise
-  changes incident state. Such a request is explained and redirected to the manual
-  controls.
+  changes incident state.
 - Answers only from real data. If a value is unavailable it says so — no
   fabrication.
-- No free-text database access; the LLM never issues SQL or arbitrary code. It
-  can only call a fixed registry of read-only tools that map 1:1 to
-  `src/intelligence/` functions.
+- No free-text database access; the LLM never issues SQL or arbitrary code.
 
 ### Offline-first requirement
 
 The deterministic keyword/intent parser (`src/intelligence/agent/deterministic.py`)
 is the **guaranteed baseline** and must handle every documented example prompt.
-The application — including the agent — must be fully functional with **no API
-key**.
+The application — including the agent — must be fully functional with **no API key**.
 
 ### Optional Claude API architecture
 
 If `ANTHROPIC_API_KEY` is present, `src/intelligence/agent/claude.py` provides a
-tool-use loop over the **same** read-only tool registry (model `claude-sonnet-4-6`).
-It is selected at runtime by `runtime.py`; its absence is not an error. `anthropic`
-is a guarded/optional import.
+tool-use loop over the same read-only tool registry (model `claude-sonnet-4-6`).
+Any failure degrades to deterministic cleanly.
 
 ---
 
 ## 9. Technology stack
 
-- **Language:** Python 3.
+- **Language:** Python 3.11.
 - **Frontend:** Streamlit (multipage via `st.navigation`), pydeck for the map,
   Carto dark-matter basemap (no Mapbox token).
 - **Data:** pandas, pyarrow (Parquet), SQLite (`data/alerts.db`).
 - **ML:** scikit-learn (RandomForest, BallTree), joblib.
-- **Geo:** bundled simplified GeoJSON + pure-Python point-in-polygon (no new
-  geospatial dependency).
+- **Clustering:** hashlib (stdlib), math (stdlib) — no new dependency.
+- **Geo:** bundled simplified admin GeoJSON + pure-Python point-in-polygon.
 - **Agent LLM (optional):** `anthropic` SDK — optional, guarded import.
-- **Config:** `python-dotenv`, `.env` (see `.env.example`).
+- **Config:** `python-dotenv`, `.env`.
 - No React, no FastAPI, no external database, no auth layer.
 
 ---
@@ -396,38 +430,87 @@ is a guarded/optional import.
 ## 10. Repository structure
 
 ```
-context.md  design_brief.md  architecture.md  workflow.md   ← project docs (this set)
+context.md  design_brief.md  architecture.md  workflow.md   ← project docs
 requirements.txt  .env.example  .gitignore
 
 data/
   raw/                         # git-ignored downloads
   processed/
-    facilities.parquet         # committed
+    facilities.parquet         # committed (72,624 rows)
     stage6_india_scores.parquet# committed (1105 rows, live-refreshable)
   incidents/
     confirmed_incidents_india.csv
     stage7_incident_scores.parquet
     match_summary.json
-  geo/                         # PLANNED — bundled india_states.geojson
+  geo/
+    india_admin.geojson        # committed (1.2 MB — 36 states + 760 districts)
   alerts.db                    # git-ignored, auto-seeded on first run
 
 src/
-  ingestion/    # Stages 1–2: firms, vnf, facilities, gihs, config, utils, visualise
+  ingestion/    # Stages 1–2: firms, vnf, facilities, config, utils
                # + refresh.py — live FIRMS NRT refresh at dashboard startup
   labeling/     # Stage 3: match_incidents
   features/     # Stage 4: engineer
   model/        # Stages 5–6: split, assemble, train
   scoring/      # Stage 7: score_incidents
   alerting/     # risk_engine, alert_store, pipeline
-  intelligence/ # PLANNED — queries, actions, geo, agent/{tools,deterministic,claude,runtime,response}
+  intelligence/
+    clustering.py       # ThermalEvent dataclass + union-find cluster_alerts()
+    fingerprint.py      # compute_fingerprint() → 6-dimension ratings
+    evidence.py         # EvidenceItem + build_evidence() → supporting/limiting/neutral
+    evolution.py        # build_evolution() → frames + milestones
+    early_warning.py    # compute_trajectory() → state + trajectory + signals
+    queries.py          # list_alerts, get_alert, get_investigation, situation_summary,
+                        # list_events, get_event, get_event_for_alert,
+                        # get_event_fingerprint, get_event_evidence,
+                        # get_event_evolution, get_event_trajectory,
+                        # find_increasing_risk_events, events_situation, ...
+    actions.py          # export_geojson, export_csv, build_incident_report, ...
+    geo.py              # resolve(lat,lon) → {state, district, in_india, zone}
+    agent/
+      tools.py          # read-only tool registry (alert + event tools, no mutations)
+      deterministic.py  # regex/intent parser; interpret = parse alias
+      claude.py         # optional Anthropic SDK tool-use loop
+      runtime.py        # selects runtime, dispatches, returns AgentReply
+      response.py       # NL formatting of tool results
 
 dashboard/
-  app.py        # current single page → PLANNED shell + st.navigation
-  timeline.py
-  theme.py  state.py  components/  pages/  agent/panel.py   # PLANNED
+  app.py        # shell: st.navigation + auto-seed + maybe_refresh + st.toast
+  theme.py      # CSS design system, injected once per page
+  state.py      # session_state defaults + typed helpers
+  data.py       # @st.cache_data wrappers: S, A, ALERTS, EVENTS, EVENT,
+                # EVENT_FP, EVENT_EV, EVENT_EVO, EVENT_TRAJ, EVENTS_SIT, ...
+  shell.py      # topbar (LIVE/SNAPSHOT badge, IST clock) + sidebar cards
+  components/   # ui.py, mapview.py, charts.py, filterbar.py
+  views/
+    command_center.py   # 5-col KPI + 4-col event KPI + map + priority alerts
+    alerts.py           # DETECTIONS tab + THERMAL EVENTS tab
+    investigation.py    # event header + fingerprint + evidence + evolution + trajectory
+    map_explorer.py     # detection layers + Thermal Events centroid overlay
+    analytics.py        # timeline + baseline + class analysis
+    facilities.py       # BallTree join → facility activity table
+    reports.py          # GeoJSON/CSV/incident export
+    model.py            # static pipeline + evaluation content
+    limitations.py      # static caveats
+  agent/
+    panel.py            # command-palette dialog + chat + result-card rendering
 
-tests/          # test_ingestion, test_features, test_split (+ PLANNED intelligence/agent tests)
-reports/        # stage6_evaluation.txt, stage6_feature_importance.csv, stage7_incident_report.txt
+tests/
+  test_clustering.py    (11 tests)
+  test_fingerprint.py   (9 tests)
+  test_evidence.py      (7 tests)
+  test_evolution.py     (9 tests)
+  test_early_warning.py (9 tests)
+  test_events.py        (8 tests)
+  test_agent_events.py  (10 tests)
+  test_intelligence_geo.py
+  test_intelligence_queries.py
+  test_intelligence_actions.py
+  test_agent_deterministic.py
+  test_ingestion.py  test_features.py  test_split.py  (original)
+  # Total: 161 tests, all passing
+
+reports/  # stage6_evaluation.txt, stage6_feature_importance.csv, stage7_incident_report.txt
 ```
 
 ---
@@ -435,43 +518,40 @@ reports/        # stage6_evaluation.txt, stage6_feature_importance.csv, stage7_i
 ## 11. Important architectural decisions
 
 1. **Single service layer.** All data/logic lives in `src/intelligence/` (built on
-   the existing `src/alerting/` engines). The Streamlit layer is presentation
-   only. This makes a future React frontend a frontend-only project.
-2. **Stay in Streamlit for now.** Lower risk for the hackathon timeline; the
-   current aesthetic is kept.
-3. **Agent = fixed read-only tool registry.** The LLM (or the deterministic
-   parser) can only invoke named functions with typed arguments. No raw state
-   access.
-4. **Deterministic parser is primary, Claude is optional.** Offline-first.
-5. **Investigation is assembled, not stored.** It is a view over existing alert
-   fields; the only backend change is exposing the risk-score factor breakdown.
-6. **Offline geo.** State/region resolution uses a bundled GeoJSON + pure-Python
-   point-in-polygon — no new dependency, no network.
-7. **Preserve, relocate, don't rewrite.** Existing renderers and logic move into
-   modules; behaviour is unchanged.
+   the existing `src/alerting/` engines). The Streamlit layer is presentation only.
+2. **Events are derived, not stored.** Thermal events are computed in-memory from
+   `alerts.db` via LRU-cached `_events_cached(_sig)` keyed on DB mtime. No new
+   table; auto-invalidates when data changes.
+3. **Deterministic event IDs.** SHA-256 of `"|".join(sorted(alert_ids))[:8 hex]` —
+   stable across recomputation from the same alert set.
+4. **Agent = fixed read-only tool registry.** The LLM (or deterministic parser)
+   can only invoke named functions with typed arguments. No raw state access,
+   no SQL, no mutation.
+5. **Deterministic parser is primary, Claude is optional.** Offline-first.
+6. **Investigation is assembled, not stored.** It is a view over existing alert
+   fields + event intelligence; no new stored entity.
+7. **Offline geo.** State/district resolution uses bundled GeoJSON +
+   pure-Python ray-casting — no new dependency, no network.
+8. **Preserve, relocate, don't rewrite.** Existing renderers and logic untouched;
+   new intelligence panels layered on top.
+9. **No dashboard module imports `src.alerting` directly** — only `src.intelligence`.
 
 ---
 
 ## 12. Known limitations & risks
 
-- **FIRMS NRT only covers ~5 days.** No historical archive → confirmed-incident
-  temporal matching is 0/30; "historical" timeline depth is limited to what is in
-  `alerts.db`.
+- **FIRMS NRT only covers ~5 days.** No historical archive.
 - **Land-cover is a coordinate-zone heuristic**, not a raster.
 - **Class A training set is thin** (~1,901 FIRMS examples via VNF oracle); Class A
   F1 ≈ 0.18 on spatial holdout.
-- **Trained model `.joblib` is not in the repo** — re-scoring new FIRMS data
-  requires the model to be present locally. When `FIRMS_MAP_KEY` and
-  `stage6_model.joblib` are both present, `src/ingestion/refresh.py` loads the
-  model at dashboard startup to score live FIRMS data. Otherwise the dashboard
-  runs off committed scored parquets + the rule-based risk engine.
-- **Alert volume is ~705 India detections**, not hundreds of thousands.
-- **State resolver accuracy** depends on the simplified GeoJSON; border cells may
-  be approximate.
-- **Streamlit reruns** — agent-applied UI state must go through the same
-  `session_state` path as manual filters to stay consistent.
-- **Optional Claude path** adds cost/latency/network dependency; must degrade to
-  deterministic cleanly.
+- **Trained model `.joblib` is not in the repo** — live NRT scoring requires it
+  locally with `FIRMS_MAP_KEY` set. Otherwise, the dashboard runs off committed
+  scored parquets.
+- **Alert volume is ~1105 India detections** (Sep 2026 NRT snapshot).
+- **Events are in-memory** — recomputation on cold cache takes O(n²) pair scan;
+  fine at ≤5k rows; ponytail comment marks the ceiling.
+- **Optional Claude path** adds cost/latency/network dependency; degrades
+  to deterministic cleanly.
 
 ---
 
@@ -483,15 +563,12 @@ reports/        # stage6_evaluation.txt, stage6_feature_importance.csv, stage7_i
 
 ### Demo priorities (in order)
 
-1. Command Center reads instantly: active alerts, criticals, where, what to do.
-2. Alerts → Investigation flow: pick a critical alert, see *why* it was flagged
-   with real evidence and a recommended action.
-3. Map: classification-coloured detections over India, click a detection → its
-   investigation.
-4. Fire Intelligence Agent (offline): the §17 demo prompt — *"Find the three
-   highest-risk persistent thermal sources near industrial facilities in eastern
-   India over the last 7 days and explain why"* → three result cards with real
-   evidence + Open Investigation / Show on Map / Generate Report.
+1. Command Center reads instantly: active alerts, criticals, event KPIs, where, what to do.
+2. Alerts → THERMAL EVENTS tab → "Investigate event #XXXXXXXX" → Investigation flow
+   showing fingerprint, evidence, evolution replay, risk trajectory.
+3. Map: detection layer + event centroid overlay.
+4. Fire Intelligence Agent (offline): *"Which events are increasing in risk?"* →
+   event list with risk trajectories + Open Investigation cards.
 5. Analytics baseline comparison and Facilities view as differentiators.
 6. Model + Limitations panels for technical credibility.
 
@@ -499,178 +576,61 @@ reports/        # stage6_evaluation.txt, stage6_feature_importance.csv, stage7_i
 
 ## 14. Future extensions (not in scope now)
 
-- Agent state-changing actions (Acknowledge / Escalate / Resolve) behind an
-  explicit confirmation gate.
-- Claude API runtime hardening and richer multi-step reasoning.
+- Agent state-changing actions (Acknowledge / Escalate / Resolve) behind a
+  confirmation gate.
+- Claude API runtime hardening and richer multi-step reasoning over events.
 - React + FastAPI frontend on top of the unchanged service layer.
-- Historical FIRMS archive ingestion → real temporal incident matching and deeper
-  timeline.
+- Historical FIRMS archive ingestion → real temporal incident matching.
 - GIHS and land-cover raster integration → better Class A / Class B precision.
+- Analytics event metrics section (`analytics.py` event panel, planned but deferred).
 - Notifications, multi-user, authentication.
+- Persistent event storage (DB table) if in-memory clustering reaches scale limits.
 
 ---
 
-## 15. Definition of "done" (this round)
+## 15. Definition of "done" (this round) ✓
 
-- Every existing feature is reachable in the new IA; nothing regressed.
-- No module under `dashboard/` imports `src.alerting` directly — only
-  `src.intelligence`.
-- `src/intelligence/` has unit tests; existing tests still pass.
-- Investigation shows only real evidence; no fabricated confidence or metrics.
-- Manual Acknowledge / Escalate / Resolve work exactly as before.
-- Fire Intelligence Agent answers every documented example prompt **with no API
-  key**, and its result cards drive the shared UI state.
-- With `ANTHROPIC_API_KEY` set, the Claude runtime is used and resolves the same
-  prompts through the same read-only tool layer.
-- The locked "not confirmed fire detection" framing appears wherever
-  classification is presented.
-- `context.md` Status Tracker updated; `git status` shows only intended files.
+- [x] Every existing feature is reachable in the new IA; nothing regressed.
+- [x] No module under `dashboard/` imports `src.alerting` directly — only `src.intelligence`.
+- [x] `src/intelligence/` has unit tests; 161 tests pass, zero failures.
+- [x] Investigation shows only real evidence; no fabricated confidence or metrics.
+- [x] Manual Acknowledge / Escalate / Resolve work exactly as before.
+- [x] Fire Intelligence Agent answers every documented example prompt with no API key.
+- [x] Event clustering, fingerprinting, evidence, evolution, and trajectory all implemented.
+- [x] The locked "not confirmed fire detection" framing appears wherever classification is presented.
+- [x] `context.md` Status Tracker updated.
 
 ---
 
 ## Status Tracker
 
-Update after every work session — what's done, what's blocked, what's next.
-
 ### Pipeline (unchanged this round)
 
-- [x] Stage 1 — Data ingestion (FIRMS NRT India + 6 global regions; VNF; GPPD; OSM). GIHS download URL still unconfirmed.
+- [x] Stage 1 — Data ingestion (FIRMS NRT India + 6 global regions; VNF; GPPD; OSM).
 - [x] Stage 2 — Facility/context layer → `data/processed/facilities.parquet` (72,624 rows).
-- [~] Stage 3 — Class A done (VNF); Class B still `B_candidate` (land-cover pending); 30 confirmed incidents curated; temporal FIRMS matching 0/30 (needs historical archive).
-- [x] Stage 4 — Feature engineering (`src/features/engineer.py`).
-- [x] Stage 5 — Assemble & spatial split (`src/model/assemble.py`, `src/model/split.py`).
-- [x] Stage 6 — RF trained global / India held out; scores committed (`stage6_india_scores.parquet`); `.joblib` git-ignored.
-- [x] Stage 7 — 30 incidents scored (21/30 anomaly-flagged) → `stage7_incident_scores.parquet`.
-- [x] Stage 8 — Single-file Streamlit dashboard (`dashboard/app.py`).
+- [~] Stage 3 — Class A done (VNF); Class B still `B_candidate`; 30 confirmed incidents curated.
+- [x] Stage 4 — Feature engineering.
+- [x] Stage 5 — Assemble & spatial split.
+- [x] Stage 6 — RF trained global / India held out; scores committed (1105 rows).
+- [x] Stage 7 — 30 incidents scored (21/30 anomaly-flagged).
+- [x] Stage 8 — Multipage Streamlit dashboard.
 
-### IA reorg + Fire Intelligence Agent (Session 5 — IMPLEMENTED)
+### Session 10 — Thermal Event Intelligence Platform
 
-- [x] Part A — `src/intelligence/` service + tool layer (`queries.py`, `actions.py`, `geo.py`) + tests.
-- [x] Part A — `src/intelligence/agent/` (`tools`, `deterministic`, `claude`, `runtime`, `response`) — read-only registry (13 tools, none state-changing).
-- [x] Offline geo resolver — `geo.py` bbox+centroid method (no dependency); `data/geo/india_outline.json` bundled for map context.
-- [x] Part B — `dashboard/` restructure: `theme.py`, `state.py`, `data.py`, `shell.py`, `components/` (ui, mapview, charts, filterbar), `views/` (9 pages), `agent/panel.py`; `app.py` → shell + `st.navigation`.
-- [x] Command Center (KPIs, live map, priority alerts, donuts, activity timeline, recent detections, quick actions, docked agent).
-- [x] Alerts (filter bar, severity grouping, pagination, expander, manual Acknowledge/Escalate/Resolve, View Investigation).
-- [x] Investigation (assembled: header, detection, context, why-flagged, classification, risk-factor breakdown, recommended action, manual actions, focused map).
-- [x] Map Explorer · Analytics (timeline + baseline + class analysis) · Facilities (BallTree join, real names) · Reports/GIS (GeoJSON/CSV/incident report) · Model · Limitations.
-- [x] `src/alerting/risk_engine.py` — additive `factors` on `RiskResult` + `risk_factors` column + `explain_score()`. `alert_store.py` — `risk_factors` TEXT column (JSON).
-- [x] Agent — deterministic runtime (offline, no key); handles all documented §13/§17 prompts (35 new tests).
-- [x] Agent — optional Claude runtime (`src/intelligence/agent/claude.py`), guarded; silent fallback to deterministic.
-- [x] Robot: supplied `bb-8.glb` (76 MB) → textures resized + quantized → `dashboard/static/bb-8.glb` (1.9 MB); rendered via self-hosted `model-viewer.min.js` (offline).
-- [x] `requirements.txt` — `plotly` added; `anthropic>=0.40` added as an optional/guarded dependency.
-- [x] Tests: 49 existing + 35 new (`test_intelligence_geo/queries/actions.py`, `test_agent_deterministic.py`) = **84 passing**.
+Implemented across 11 commits (Tasks 1–11 of `docs/superpowers/plans/2026-09-03-thermal-event-intelligence.md`):
 
-**Run:** `python -m venv .venv && .venv/Scripts/pip install -r requirements.txt`
-then `.venv/Scripts/python -m streamlit run dashboard/app.py`. `data/alerts.db`
-auto-seeds on first launch. No API key needed.
+- [x] **Task 1** (`820ceb7`) — `src/intelligence/clustering.py`: `ThermalEvent` (29 fields), `cluster_alerts()`, union-find, SHA-256 event IDs. 11 tests.
+- [x] **Task 2** (`9fa93b4`) — `src/intelligence/fingerprint.py`: `compute_fingerprint()`, 6 dimensions, 6 behaviour categories. 9 tests.
+- [x] **Task 3** (`4055166`) — `src/intelligence/evidence.py`: `EvidenceItem`, `build_evidence()`, SUPPORTING/LIMITING/NEUTRAL routing. 7 tests.
+- [x] **Task 4** (`5cf55dd`) — `src/intelligence/evolution.py`: `build_evolution()`, ordered frames, 4 milestone types. 9 tests.
+- [x] **Task 5** (`e2fd067`) — `src/intelligence/early_warning.py`: `compute_trajectory(frames)`, 5 risk states. 9 tests.
+- [x] **Task 6** (`bf4c5e5`) — `queries.py` extended: `_events_cached` (LRU, DB-mtime key), 10 new event query functions, `events_situation()`. 8 integration tests.
+- [x] **Task 7** (`83cde8b`) — `dashboard/data.py`: 8 `@st.cache_data(ttl=30)` event wrappers.
+- [x] **Task 8** (`ce554fe`) — Agent tools (8 new) + deterministic parser (event ID regex + 8 event intents + `interpret = parse` alias). 10 tests.
+- [x] **Task 9** (`b1730bd`) — `investigation.py` upgraded: event header, fingerprint panel, evidence stack, evolution replay slider, risk trajectory.
+- [x] **Task 10** (`053606b`) — `command_center.py`: 4-col event KPI row. `alerts.py`: DETECTIONS / THERMAL EVENTS tabs.
+- [x] **Task 11** (`9142dfa`) — `map_explorer.py`: "Thermal Events" checkbox + amber ScatterplotLayer centroid overlay.
 
-**Deferred (explicitly out of scope now):** agent-initiated Acknowledge /
-Escalate / Resolve; historical FIRMS archive; GIHS; land-cover raster; React
-frontend (service layer is already frontend-agnostic for it).
+**Test count:** 161 passing, 0 failing.
 
-**Known follow-ups:** `st.dialog` agent closes on submit (Command Center's docked
-agent is unaffected); Streamlit auto-collapses the nav sidebar below ~1000 px
-width.
-
-### Session 6 — geographic-consistency fix
-
-Root cause traced from source → intelligence → map: the FIRMS ingestion used a
-**rectangular** India bounding box (`lat 6–37, lon 68–97.5`) which also captures
-Sri Lanka, Pakistan, Tibet, Bangladesh, Myanmar. Of the 697 seeded detections,
-**only ~300 are actually inside an Indian state** (270 were Sri Lanka, ~91
-Pakistan, etc.). Separately, the display location was `nearest_city` from a
-hard-coded 30-city list, which produced impossible labels like
-"Chennai, Andhra Pradesh".
-
-- [x] `src/intelligence/geo.py` **rewritten** — authoritative offline
-  point-in-polygon resolver over a bundled simplified admin GeoJSON
-  (`data/geo/india_admin.geojson`, 1.2 MB: 36 dissolved state polygons + 760
-  district polygons; pure-Python ray-casting; per-feature bbox pre-filter; 0.03°
-  boundary tolerance for polygon-simplification + FIRMS-pixel error).
-  `resolve(lat,lon) -> {state, district, in_india, zone}`. Bengaluru→Karnataka,
-  Paradip→Odisha, Dhanbad→Jharkhand, etc. all correct; foreign points →
-  `in_india=False` + a coarse `zone` ("Sri Lanka", "Bay of Bengal", …).
-- [x] `queries.py` — every alert annotated with `state / district / in_india /
-  zone / place`; **the product scope is now India-only** (`_alerts()` filters
-  `in_india`); `place` = `"District, State"` (never a city→state inference);
-  `outside_india_alerts()` + `geo_audit()` added; daily/analytics recomputed
-  from the India set.
-- [x] Coordinates are **never transformed, swapped, or clipped** — `geo` only
-  *classifies* points; outside-India detections keep their true lat/lon and are
-  shown on the map as an explicit, dim, opt-in "Regional context (outside India)"
-  layer (Map Explorer), plus counted in the **Data validation** expander
-  (plotted / in-India / outside / outside-bbox / lat-lon ranges / per-region
-  breakdown / samples).
-- [x] Map: CARTO dark basemap restored (`map_provider="carto"`, `map_style="dark"`,
-  no Mapbox token) so surrounding countries stay visible; the bundled India
-  outline is now a thin border, not a fill.
-- [x] Incidents keep their **curated** `state` (human-verified); 28/30 match
-  point-in-polygon, 2 are a near-border coordinate and an offshore platform —
-  left as curated.
-- [x] Tests: +14 (`test_intelligence_geo.py` rewritten with the required
-  known-location checks + no-lat/lon-swap + audit; `test_intelligence_queries.py`
-  India-scope + label-consistency + audit). **98 passing.**
-- [x] Build-time only: `shapely` used to dissolve/simplify the district GeoJSON
-  (script in scratch, not a runtime dependency).
-
-**Numbers changed:** active alerts 697 → ~300 (the ~397 non-India FIRMS points
-are excluded from the product but retained and viewable).
-
-### Session 7 — Fire Intelligence Agent UI revision (presentation only)
-
-Interaction/presentation refinement of the agent panel. **No change** to the
-agent architecture, the intelligence layer, the read-only tool set, the GLB
-asset, or any other view.
-
-- [x] **Idle robot is completely static.** Removed `auto-rotate` /
-  `rotation-per-second` / `camera-controls` from `<model-viewer>`; the GLB is
-  `pause()`d on load so any embedded clip is frozen. Hover = a subtle
-  scale + brightness response only.
-- [x] **Explicit visual states** (`dashboard/agent/panel.py`):
-  `IDLE` (collapsed, static) → `OPEN` (expanded, static) → `THINKING/ANSWERING`
-  (a restrained CSS "scan" sweep + inset glow + `ANALYSING` tag drawn *around*
-  the static robot, plus an in-conversation spinner) → back to `OPEN/IDLE`.
-  Driven by `st.session_state["agent_pending"]`: the busy overlay is a plain
-  CSS element Python renders only while a query is in flight, and the rerun
-  after the reply lands clears it — motion can never outlive the response.
-  `_THINK_FLOOR_S = 0.85` keeps the state legible when the offline parser
-  answers instantly.
-- [x] **Click-to-expand, in place.** Docked panel (`scope="dock"`) collapses to
-  a compact card — robot + `ONLINE` + one line ("Ask about alerts, risks,
-  regions or facilities.") — and expands to robot-on-top + `Conversation`
-  below, in the same card, via an `Open console ▸ / Collapse ▾` control. The
-  sidebar dialog (`scope="dialog"`, `collapsible=False`) is always expanded.
-- [x] **Styling aligned to the dashboard.** Dropped the bright-purple chat
-  bubbles: user turns are a subtle `panel2` surface with a thin accent-blue
-  right border, bot turns a plain bordered panel; 6px radii; `IBM Plex Mono`
-  section labels; result cards get a thin accent-blue left rule. `AGENT` purple
-  is no longer used in the agent surface.
-- [x] Command Center wraps the panel in `st.container(border=True)` instead of
-  the old (non-wrapping) `<div class="agent-wrap">` markup.
-- [x] Tests unchanged — **98 passing** (agent logic untouched).
-
-**Last updated:** 2026-09-01 (Session 7 — Fire Intelligence Agent UI revision).
-
-### Session 8 — Audit fixes
-
-- [x] Fixed Claude model name: `claude-sonnet-5` → `claude-sonnet-4-6` (`agent/claude.py`)
-- [x] Fixed agent panel bold stripping: placeholder substitution preserves `<strong>` through `html.escape()` (`agent/panel.py`)
-- [x] Fixed agent status indicator: dynamic CLAUDE (blue `#3d7dc8`) / LOCAL (amber) replacing static "ONLINE" (`agent/panel.py`)
-- [x] Fixed topbar badge: green "LIVE" → amber "NRT SNAPSHOT" (honest data-freshness label) (`shell.py`)
-- [x] Fixed investigation classification labels: readable `P(A): 63%` format replacing raw floats; anomaly shown as "YES — pattern anomaly ⚠" (`investigation.py`)
-- [x] Improved alert cards: truncated `alert_id` shown as monospace label (`ui.py`, `response.py`)
-- [x] Improved map tooltip: `alert_id` added as first line (`mapview.py`)
-- [x] Improved investigation agent response: structured Observed / Model prediction / Flagged because / Recommended / Note format (`response.py`)
-- [x] Tests: 97/98 passing (1 pre-existing failure in `risk_factors` SQLite round-trip, not introduced here)
-
-**Last updated:** 2026-09-03 (Session 8 — audit fixes)
-
-### Session 9 — Live FIRMS NRT data wiring
-
-- [x] `src/ingestion/refresh.py` (NEW) — `maybe_refresh(max_age_hours=2.0)`: fetches live VIIRS+MODIS NRT for India bbox, lightweight feature engineering (India-only, no 335K global pipeline), `stage6_model.joblib` inference, rewrites `stage6_india_scores.parquet`, reseeds `alerts.db`. Staleness measured by `MAX(acq_date)` in alerts.db (not file mtime — git pull touches mtime). Falls back silently on any error.
-- [x] `dashboard/data.py` — `maybe_refresh()` wrapper; clears Streamlit cache on successful refresh
-- [x] `dashboard/app.py` — calls `maybe_refresh()` at startup; `st.toast` on refresh success or error
-- [x] `dashboard/shell.py` — topbar badge: green "LIVE NRT" when FIRMS_MAP_KEY set + data < 2h old; amber "NRT SNAPSHOT" otherwise. New `sidebar_refresh_card()` with "↻ Refresh Data" button (only shown when FIRMS_MAP_KEY is set); age label shows "just now / Xh ago / X days ago"
-- [x] `stage6_india_scores.parquet` updated: static Aug 22–27 snapshot (705 rows) → live Sep 3 2026 (1105 rows: 44 CRITICAL, 302 HIGH, 419 MEDIUM, 340 LOW)
-
-**Last updated:** 2026-09-03 (Session 9 — live FIRMS NRT data wiring)
+**Last updated:** 2026-09-03 (Session 10 — Thermal Event Intelligence Platform complete)
