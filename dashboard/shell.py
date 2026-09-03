@@ -27,6 +27,30 @@ def brand() -> None:
     )
 
 
+def sidebar_refresh_card() -> None:
+    """Sidebar FIRMS refresh control — only rendered when FIRMS_MAP_KEY is set."""
+    age = _firms_age_hours()
+    age_str = f"{age:.0f}h ago" if age < 48 else "snapshot"
+    st.markdown('<div style="height:4px"></div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="panel" style="padding:9px 12px">'
+        f'<div style="font-size:11px;font-weight:700">FIRMS NRT Feed</div>'
+        f'<div style="font-size:10px;color:#5a6472;margin-top:2px">Last fetch: {age_str}</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+    if st.button("↻  Refresh Data", key="side_refresh", use_container_width=True):
+        with st.spinner("Fetching live FIRMS data…"):
+            result = data.maybe_refresh(max_age_hours=0)
+        if result["status"] == "refreshed":
+            st.toast(f"Refreshed: {result['rows']} hotspots loaded.", icon="🛰️")
+            st.rerun()
+        elif result["status"] == "no_data":
+            st.toast("FIRMS returned no data — try again shortly.", icon="⚠️")
+        elif result["status"] == "error":
+            st.toast(f"Error: {result.get('error', 'unknown')}", icon="🚨")
+
+
 def sidebar_agent_card() -> None:
     st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
     st.markdown(

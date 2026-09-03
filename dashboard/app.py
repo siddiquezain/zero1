@@ -20,6 +20,7 @@ import streamlit as st
 
 from dashboard import data, state
 from dashboard import theme as T
+from src.ingestion.config import FIRMS_MAP_KEY
 
 T.inject("India Fire Intelligence")
 state.init()
@@ -60,6 +61,8 @@ with st.sidebar:
 nav = st.navigation(pages, position="sidebar")
 
 with st.sidebar:
+    if FIRMS_MAP_KEY:
+        shell.sidebar_refresh_card()
     shell.sidebar_agent_card()
     st.markdown(
         '<div style="font-size:9px;color:#5a6472;padding:10px 6px;line-height:1.6">'
