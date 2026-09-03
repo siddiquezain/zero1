@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import pandas as pd
+import pydeck as pdk
 import streamlit as st
 
 from dashboard import data, state
@@ -34,9 +35,16 @@ def render() -> None:
                                     "outside every Indian state polygon (Sri Lanka, Pakistan, …). "
                                     "Shown at their true location, dimmed — not part of the India "
                                     "monitoring dataset.")
+        show_events = st.checkbox(
+            "Thermal Events",
+            value=False,
+            key="map_events",
+            help="Event centroids — one amber circle per clustered thermal event.",
+        )
         st.session_state["show_incidents"] = show_inc
         st.session_state["show_facilities"] = show_fac
         st.session_state["show_outside"] = show_out
+        st.session_state["show_events"] = show_events
         st.markdown('<div style="height:6px"></div>', unsafe_allow_html=True)
         ui.legend([("Industrial Fire", T.CLS_INDUSTRIAL), ("Persistent Source", T.CLS_PERSISTENT),
                    ("Natural Fire", T.CLS_NATURAL), ("Confirmed Incident", T.CLS_INCIDENT),
@@ -55,6 +63,39 @@ def render() -> None:
             focus_alert_id=st.session_state.get("focus_alert_id"),
         )
         st.pydeck_chart(deck, use_container_width=True, height=520)
+
+        if show_events:
+            ev_list = data.EVENTS(state.filters(), limit=300)
+            if ev_list:
+                ev_pts = [
+                    {
+                        "lat": e["centroid_lat"],
+                        "lon": e["centroid_lon"],
+                        "label": f'EVENT #{e["event_id"]} · {e["observation_count"]} obs · risk {e["risk_score"]}',
+                    }
+                    for e in ev_list
+                ]
+                ev_layer = pdk.Layer(
+                    "ScatterplotLayer",
+                    data=ev_pts,
+                    get_position=["lon", "lat"],
+                    get_radius=8000,
+                    get_fill_color=[245, 158, 11, 180],
+                    pickable=True,
+                )
+                ev_deck = pdk.Deck(
+                    layers=[ev_layer],
+                    initial_view_state=deck.initial_view_state,
+                    tooltip={"text": "{label}"},
+                    map_style=deck.map_style,
+                )
+                ui.section(f"{len(ev_list)} thermal events", "centroid overlay")
+                st.markdown(
+                    f'<div style="font-size:10px;color:{T.T2};margin-bottom:4px">'
+                    f'Amber circles = event centroids. Click a detection marker above to investigate.</div>',
+                    unsafe_allow_html=True,
+                )
+                st.pydeck_chart(ev_deck, use_container_width=True, height=300)
 
     # ── development data-validation report (requirement #10) ──────────────
     aud = data.geo_audit()
