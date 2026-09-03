@@ -62,7 +62,7 @@ def sidebar_agent_card() -> None:
         '<div class="panel" style="padding:10px 12px">'
         '<div style="display:flex;align-items:center;gap:10px">'
         '<img src="/app/static/agent-bot.webp" style="width:40px;height:40px;'
-        'object-fit:contain;border-radius:7px;background:#fff;padding:2px;flex:none">'
+        'object-fit:contain;border-radius:7px;transform:scaleX(-1);flex:none">'
         '<div>'
         '<div style="font-size:11.5px;font-weight:700">Fire Intelligence Agent</div>'
         '<div style="font-size:10px;color:#5a6472;margin-top:2px;line-height:1.4">'

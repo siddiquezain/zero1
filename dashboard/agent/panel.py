@@ -42,8 +42,8 @@ _THINK_FLOOR_S = 0.85
 def _stage_html(thinking: bool = False) -> str:
     """Build the iframe HTML. Two CSS variants: idle (hover scale) and thinking (bob + glow)."""
     bob = "animation:agent-bob 1s ease-in-out infinite;" if thinking else "transition:transform .2s ease,filter .2s ease;"
-    glow = "animation:pulse-glow 1.4s ease-in-out infinite;" if thinking else "box-shadow:0 4px 18px rgba(0,0,0,.38);"
-    hover_rule = "" if thinking else ".stage:hover .bot-card img{transform:scale(1.05) translateY(-4px);filter:brightness(1.03);}"
+    glow = "animation:pulse-glow 1.4s ease-in-out infinite;" if thinking else ""
+    hover_rule = "" if thinking else ".stage:hover .bot-card img{transform:scaleX(-1) scale(1.05) translateY(-4px);filter:brightness(1.03);}"
     ring = '<div class="ring"></div>' if thinking else ""
     return f"""
 <style>
@@ -64,15 +64,15 @@ def _stage_html(thinking: bool = False) -> str:
   }}
   .bot-card{{
     position:relative;z-index:1;
-    background:#fff;border-radius:10px;padding:6px 8px 2px;
+    background:transparent;border-radius:10px;padding:6px 8px 2px;
     {glow}
   }}
   @keyframes pulse-glow{{
-    0%,100%{{box-shadow:0 4px 18px rgba(0,0,0,.38),0 0 0 0 rgba(61,125,200,.55);}}
-    50%{{box-shadow:0 4px 18px rgba(0,0,0,.38),0 0 0 14px rgba(61,125,200,0);}}
+    0%,100%{{filter:drop-shadow(0 0 0px rgba(61,125,200,.55));}}
+    50%{{filter:drop-shadow(0 0 14px rgba(61,125,200,.8));}}
   }}
-  .bot-card img{{height:{_STAGE_H - 38}px;width:auto;display:block;{bob}}}
-  @keyframes agent-bob{{0%,100%{{transform:translateY(0);}}50%{{transform:translateY(-8px);}}}}
+  .bot-card img{{height:{_STAGE_H - 38}px;width:auto;display:block;transform:scaleX(-1);{bob}}}
+  @keyframes agent-bob{{0%,100%{{transform:scaleX(-1) translateY(0);}}50%{{transform:scaleX(-1) translateY(-8px);}}}}
   {hover_rule}
   /* pulsing ring shown only while thinking */
   .ring{{
