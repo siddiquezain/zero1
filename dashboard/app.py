@@ -25,6 +25,12 @@ T.inject("India Fire Intelligence")
 state.init()
 data.ensure_seeded()
 
+_refresh = data.maybe_refresh()
+if _refresh["status"] == "refreshed":
+    st.toast(f"Live data: {_refresh['rows']} hotspots fetched from NASA FIRMS NRT.", icon="🛰️")
+elif _refresh["status"] == "error":
+    st.toast("FIRMS refresh failed — showing cached data.", icon="⚠️")
+
 from dashboard import shell                                    # noqa: E402
 from dashboard.views import (alerts, analytics, command_center, facilities,      # noqa: E402
                              investigation, limitations, map_explorer, model, reports)

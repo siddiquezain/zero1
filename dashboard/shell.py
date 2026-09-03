@@ -8,6 +8,8 @@ import streamlit as st
 from dashboard import data, state
 from dashboard import theme as T
 from dashboard.agent import panel as agent_panel
+from src.ingestion.refresh import _age_hours as _firms_age_hours
+from src.ingestion.config import FIRMS_MAP_KEY
 
 
 def _ist_now() -> str:
@@ -46,6 +48,15 @@ def _agent_context() -> dict:
     }
 
 
+def _nrt_badge() -> str:
+    """Green LIVE dot when FIRMS key is set and data is fresh (<2h); amber snapshot otherwise."""
+    if FIRMS_MAP_KEY and _firms_age_hours() < 2.0:
+        return ('<span class="dot" style="background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,0.2)"></span>'
+                'LIVE NRT')
+    return ('<span class="dot" style="background:#f59e0b;box-shadow:0 0 0 3px rgba(245,158,11,0.2)"></span>'
+            'NRT SNAPSHOT')
+
+
 def topbar(active_page: str) -> None:
     st.session_state["_active_page"] = active_page
     s = data.S()
@@ -55,7 +66,7 @@ def topbar(active_page: str) -> None:
         f'<div class="topbar">'
         f'<div style="display:flex;align-items:center;gap:14px">'
         f'<div class="tb-pills">'
-        f'<span class="tb-pill"><span class="dot" style="background:#f59e0b;box-shadow:0 0 0 3px rgba(245,158,11,0.2)"></span>NRT SNAPSHOT</span>'
+        f'<span class="tb-pill">{_nrt_badge()}</span>'
         f'<span class="tb-pill">{_ist_now()}</span>'
         f'<span class="tb-pill">VIIRS 375m / MODIS 1km</span>'
         f'<span class="tb-pill">window {lo} → {hi}</span>'

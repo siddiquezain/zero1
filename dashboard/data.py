@@ -17,10 +17,20 @@ if str(_ROOT) not in sys.path:
 
 from src.intelligence import actions, queries            # noqa: E402
 from src.intelligence.agent import ask as agent_ask      # noqa: E402  (re-export)
+from src.ingestion.refresh import maybe_refresh as _maybe_refresh  # noqa: E402
 
 
 def ensure_seeded() -> None:
     actions.ensure_seeded()
+
+
+def maybe_refresh(max_age_hours: float = 2.0) -> dict:
+    """Fetch live FIRMS data if stale. Clears Streamlit cache on success."""
+    result = _maybe_refresh(max_age_hours)
+    if result.get("status") == "refreshed":
+        queries.clear_caches()
+        st.cache_data.clear()
+    return result
 
 
 def _sig() -> float:
