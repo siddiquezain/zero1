@@ -1,298 +1,367 @@
 # SIH26162 — End-to-End System Workflow
 
 > The complete operational workflow, from satellite data to an analyst decision,
-> plus the main user journeys. Derived from the approved plan and the existing
-> codebase. Companion to `context.md`, `design_brief.md`, `architecture.md`.
+> plus the main user journeys. Companion to `context.md`, `architecture.md`,
+> `design_brief.md`, `modeltrain.md`. Reflects commit `ae61893` (Session 12).
 >
-> Each step is marked **[AUTOMATED]** (system does it), **[MANUAL]** (analyst does
-> it), or **[AGENT-ASSISTED]** (analyst asks, agent helps — read-only).
-> Legend also: **[IMPLEMENTED]** · **[PLANNED]** · **[OPTIONAL/FUTURE]**.
+> Each step is marked **[AUTOMATED]** (system), **[MANUAL]** (analyst), or
+> **[AGENT-ASSISTED]** (analyst asks, agent helps — read-only). All steps below
+> are **[IMPLEMENTED]** unless noted.
 
 ---
 
-## Part 1 — Data → Intelligence pipeline
+## Part 1 — Data → Intelligence pipeline (offline, Stages 1–8)
 
-This is the offline pipeline that produces the data the dashboard serves. It is
-**[IMPLEMENTED]** (Stages 1–8) and **not modified this round**; the committed
-Parquet outputs are what the app reads.
+This produces the data the dashboard serves. The committed Parquet/CSV outputs
+are what a fresh clone reads. `modeltrain.md` has every number with `path:line`
+citations.
 
-### 1. Data acquisition **[AUTOMATED] [IMPLEMENTED]**
+### 1. Data acquisition **[AUTOMATED]**
 
-- NASA FIRMS NRT active-fire detections pulled for the India bounding box
-  (`src/ingestion/firms.py`), plus 6 non-India regions for training.
-- VIIRS Nightfire (VNF) global gas-flare catalogue (`src/ingestion/vnf.py`).
+- NASA FIRMS NRT active-fire detections for the India bounding box
+  (`src/ingestion/firms.py`), plus 6 non-India regions for training. Every row is
+  tagged `split` (`train_global` / `validation_global` / `india_holdout`) **at
+  ingest**; `enforce_india_split` retags any coordinate inside the India bbox to
+  `india_holdout` regardless of which region was requested.
+- VIIRS Nightfire (VNF) Global Gas Flare Survey, 2012–2019 (`src/ingestion/vnf.py`)
+  — used as a **Class A labelling oracle only**, never as a feature.
 - WRI Global Power Plant Database + OSM `landuse=industrial` polygons
-  (`src/ingestion/facilities.py`).
-- Every row tagged with `split` (`train_global` / `validation_global` /
-  `india_holdout`) **at ingest time**.
-- Limitation: FIRMS NRT covers only ~5 days; no historical archive.
+  (`src/ingestion/facilities.py`) → normalised `facilities.parquet`
+  (`facility_id, lat, lon, facility_type, source, name, country`; 72,624 rows,
+  39,277 in India).
+- **Limitation:** FIRMS NRT covers only ~5 days; there is no historical archive.
 
-**Dashboard-triggered live refresh [IMPLEMENTED]:** `src/ingestion/refresh.py`
-fetches fresh FIRMS NRT on every dashboard startup (when `FIRMS_MAP_KEY` is set).
-Staleness is checked by querying `MAX(acq_date)` from `alerts.db`; if > 2h old,
-fresh data is fetched and the store reseeded.
+### 2. Data cleaning **[AUTOMATED]** (`src/features/engineer.py`)
 
-### 2. FIRMS / thermal-anomaly ingestion **[AUTOMATED] [IMPLEMENTED]**
+- Column normalisation across MODIS/VIIRS products (brightness-temperature column
+  resolution: `bright_ti4` for VIIRS, `brightness` for MODIS); datetime parsing;
+  coordinate sanity checks.
 
-- Raw CSV/Parquet written to `data/raw/`; row counts logged; leakage guard
-  (`enforce_india_split`) run.
-
-### 3. Data cleaning **[AUTOMATED] [IMPLEMENTED]**
-
-- Column normalisation across MODIS/VIIRS products; brightness-temperature column
-  resolution; datetime parsing; coordinate sanity checks.
-
-### 4. Feature extraction **[AUTOMATED] [IMPLEMENTED]** (`src/features/engineer.py`)
+### 3. Feature engineering **[AUTOMATED]** (`src/features/engineer.py`)
 
 Per detection: `bt_kelvin`, `bt_11_kelvin`, `frp_mw`, `persistence_count`
-(same ~1 km cell re-lit within the window — the strongest discriminator),
-`day_night`, `agri_season_flag`, `spatial_grid_id`, `grid_key_1km`, `confidence`.
-These are **model inputs, never labels.**
+(cross-file count of re-detections in the same ~1 km grid cell over the NRT
+window), `day_night`, `agri_season_flag` (month ∈ `{10,11,4,5,7,8,9,1,2}`),
+`spatial_grid_id` (1°), `grid_key_1km` (0.01°), `confidence`, and — via a
+BallTree haversine query against `facilities.parquet` —
+`dist_nearest_facility_km`, `nearest_facility_type`, `nearest_facility_source`.
+**These are model inputs, never labels. Facility proximity is a feature, never
+ground truth.**
 
-### 5. Industrial / facility context enrichment **[AUTOMATED] [IMPLEMENTED]**
+### 4. Assemble & split **[AUTOMATED]** (`src/model/assemble.py`, `split.py`)
 
-- BallTree (haversine) nearest-facility query against `facilities.parquet` →
-  `dist_nearest_facility_km`, `nearest_facility_type`, `nearest_facility_source`.
-- Facility proximity is a **feature, never a ground-truth label**.
+- **VNF oracle:** build a BallTree over VNF gas-flare sites; a global FIRMS row
+  within `VNF_ORACLE_KM = 5` km of a VNF site → `label = "A"`, else
+  `"B_candidate"`. VNF rows are excluded from training (their `avg_temp` 1500–2000 K
+  is a different physical quantity from FIRMS `bt_kelvin` 300–500 K).
+- **Spatial-grid split:** non-India rows grouped into 1° × 1° cells; cells
+  shuffled with `seed=42` and assigned 80 % → `train_global`, 20 % →
+  `validation_global`. A whole cell goes to one side — **never split at the row
+  level**.
+- **Leakage assertions must pass:** no India coordinate in train/val; disjoint
+  grid cells; (facility overlap; label ↔ split correlation).
 
-### 6. Classification **[AUTOMATED] [IMPLEMENTED]** (`src/model/`)
+### 5. Classification **[AUTOMATED]** (`src/model/train.py`)
 
-- RandomForest, 7 features, trained on global data with India held out; spatial-
-  grid split; VNF used as a labelling oracle only.
+- `Pipeline(SimpleImputer(median), RandomForestClassifier(300 trees,
+  min_samples_leaf=10, class_weight="balanced", random_state=42))`, **7
+  features** (§Part 1.3, all FIRMS-native and available at India inference time).
+- **Three-way evaluation, reported side by side:** random-split baseline
+  (inflated), spatial-grid holdout (honest — this is the model that is saved and
+  used), India geographic holdout (no labels — predicted distribution + anomaly
+  rate only).
 - Output per India detection: `predicted_label` (A / B_candidate), `prob_A`,
-  `prob_B_candidate`.
+  `prob_B_candidate`, `max_prob`.
 
-### 7. Confidence calculation **[AUTOMATED] [IMPLEMENTED]**
+### 6. Anomaly flag **[AUTOMATED]**
 
-- Model class probabilities per detection.
-- **Anomaly rule:** `max(prob) < 0.55` → the detection matches neither learned
-  pattern → **Industrial Fire / Abnormal Thermal Event** candidate.
-- FIRMS's own `confidence` field is carried through as a secondary signal.
-- The UI presents this as "model class probability", **not** as a fabricated
-  detection-confidence percentage.
+- `max(prob) < 0.55` → the detection matches neither learned pattern →
+  "Industrial Fire / Abnormal Thermal Event" candidate. **Not a model class — a
+  post-hoc flag.** FIRMS's own `confidence` field is carried through as a
+  secondary signal.
+- The UI presents model probabilities as "model class probability", **never** as
+  a fabricated detection-confidence percentage.
 
-### 8. Persistent thermal-source detection **[AUTOMATED] [IMPLEMENTED]**
+### 7. Risk scoring & alert generation **[AUTOMATED]** (`src/alerting/`)
 
-- `persistence_count` per ~1 km cell over the NRT window; high persistence + Class
-  A + near facility → **Persistent Industrial Thermal Source**.
-
-### 9. Alert generation **[AUTOMATED] [IMPLEMENTED]** (`src/alerting/`)
-
-- `risk_engine.score_dataframe` derives, per detection:
-  `output_class` (3-class), `risk_score` (0–100, transparent additive rule),
-  `severity` (CRITICAL ≥ 65 / HIGH ≥ 40 / MEDIUM ≥ 20 / LOW), `land_cover_context`,
-  `hazard_facility_type`, `narrative`, `nearest_city`, `dist_nearest_city_km`,
-  `near_population`.
-  - **[PLANNED additive]** `risk_factors` — the list of `(reason, +points)`
-    components that produced the score (for the Investigation view).
+- `risk_engine.score_dataframe` derives, per detection: `output_class` (the
+  3-class label, from anomaly flag + `predicted_label`), `risk_score` (0–100,
+  transparent additive rule), `severity` (≥65 CRITICAL / ≥40 HIGH / ≥20 MEDIUM /
+  <20 LOW), `land_cover_context`, `hazard_facility_type`, `narrative`,
+  `nearest_city`, `dist_nearest_city_km`, `near_population`, and `risk_factors`
+  (the list of `(reason, +points)` components that produced the score).
 - `pipeline.run()` inserts non-duplicate rows into `data/alerts.db` with an
   initial status by severity (CRITICAL/HIGH → `ALERTED`, MEDIUM → `VALIDATING`,
   else `DETECTED`).
-- On first app launch the store auto-seeds if `alerts.db` is absent. On every
-  launch, if data is stale (latest `acq_date` > 2h ago) and `FIRMS_MAP_KEY` is
-  set, `src/ingestion/refresh.py` reseeds with live FIRMS data.
+- On first app launch the store auto-seeds if `alerts.db` is absent.
 
-### Incident evaluation set **[AUTOMATED] [IMPLEMENTED]** (`src/scoring/`)
+### 8. Incident evaluation set **[AUTOMATED]** (`src/scoring/score_incidents.py`)
 
-- 30 curated real Indian industrial incidents scored through the model →
-  `stage7_incident_scores.parquet` (21/30 anomaly-flagged). Independent
-  evaluation / demo only — **not a training class**.
+- 30 curated real Indian industrial incidents (2019–2023) scored through the
+  model → `stage7_incident_scores.parquet` (21/30 anomaly-flagged in the training
+  run). Thermal features are NaN (no historical FIRMS archive) and imputed;
+  scoring leans on `dist_nearest_facility_km` / `agri_season_flag` / `acq_month`.
+  Independent evaluation / demo only — **not a training class**.
+- `src/labeling/match_incidents.py` independently checks each incident for a FIRMS
+  detection within 1 km / ±1 day: **0/30 match** (NRT vs 2019–2023). Unmatched
+  incidents are kept as satellite-omission *findings*, not discarded.
+
+### Live FIRMS NRT refresh **[AUTOMATED, runtime]** (`src/ingestion/refresh.py`)
+
+When `FIRMS_MAP_KEY` is set **and** `data/processed/stage6_model.joblib` is
+present locally, `maybe_refresh()` runs at dashboard startup (and on the sidebar
+`↻ Refresh Data` button): if `today − MAX(acq_date)` in `alerts.db` exceeds the
+threshold, it fetches fresh VIIRS+MODIS NRT for the India bbox, rebuilds the 7
+feature columns, runs the joblib model, rewrites `stage6_india_scores.parquet`,
+and reseeds `alerts.db` via `pipeline.run(fresh=True)`. **Any failure falls back
+to the existing data silently** — the dashboard always has data. Without the key
+or the model file, the committed snapshot is used and the status is `no_key` /
+`no_model`.
 
 ---
 
-## Part 2 — Serving & interaction workflow
+## Part 2 — Serving & interaction
 
-Everything below runs in the Streamlit app against the committed data + `alerts.db`
-(or live-refreshed data when `FIRMS_MAP_KEY` is set and `stage6_model.joblib` is
-present).
+Everything below runs in the Streamlit app against `alerts.db` (committed-snapshot
+seed, or live-refreshed).
 
-### 10. Geographic visualisation **[AUTOMATED render / [MANUAL] explore] [IMPLEMENTED map, PLANNED page]**
+### 9. Geographic visualisation **[AUTOMATED render / MANUAL explore]**
 
-- The India detection map (pydeck + Carto dark) plots scored detections coloured
-  by class (or severity), with the confirmed-incident overlay and an optional
-  facility layer.
-- **[PLANNED]** `geo.annotate_states` adds a `state` column so detections/alerts
-  can be filtered and summarised by Indian state / region.
-- **[MANUAL]** analyst pans/zooms, toggles layers and colour-by, hovers for
-  metrics, clicks a detection to investigate it.
+- **Map Explorer** and the **Command Center map** plot every scored India
+  detection at its true lat/lon on the CARTO dark basemap, coloured by class
+  (or severity), radius by risk. Neighbouring-country labels stay visible for
+  context; a thin India outline is drawn on top.
+- **Layers:** confirmed-incident overlay (default on), optional facility layer,
+  optional "Regional context (outside India)" layer (dim, true coordinates),
+  optional "Thermal Events" centroid overlay (amber, a separate deck below the
+  main map).
+- **Geography is authoritative:** `geo.resolve(lat, lon)` runs pure-Python
+  point-in-polygon over a bundled 1.2 MB admin GeoJSON. A city name never implies
+  a state; out-of-India points are flagged (`in_india=False`), never moved.
+- **[MANUAL]** the analyst pans/zooms, toggles layers and colour-by, hovers for
+  metrics, clicks a detection to investigate it, and can open the **Data
+  validation** expander to verify the plotted layer (counts, lat/lon ranges,
+  per-zone breakdown, sample rows).
 
-### 11. Investigation workflow **[MANUAL, system-assembled] [PLANNED]**
+### 10. Thermal-event clustering **[AUTOMATED, derived]**
 
-Entering Investigation for an alert (`queries.get_investigation(alert_id)`), the
-analyst sees, assembled from real fields only:
+- On any read of events, `queries._events_cached` runs
+  `clustering.cluster_alerts(alerts, spatial_km=15, temporal_days=3)`: union-find
+  over all pairs, merging two alerts when haversine ≤ 15 km AND |date gap| ≤ 3
+  days. Deterministic event id = `sha256(sorted alert_ids)[:8]`.
+- Cached by `alerts.db` mtime → auto-recomputes when the data changes. No DB
+  table.
+- Each event carries 29 fields (centroid, dates, duration, observation count,
+  spatial extent, peak/mean FRP & BT, night/day counts, max persistence, nearest
+  facility, predicted class, max model probability, anomaly flag, max risk, max
+  severity, resolved state/district/zone, output class).
 
-1. **Incident header** — class, city + state, `RISK n/100`, model class
-   probability, status.
-2. **Detection** — FRP, persistence, detection date/time, day/night, coordinates,
-   satellite/instrument (VIIRS 375 m), FIRMS confidence.
-3. **Context** — distance to nearest facility + hazard type, land-cover context,
-   nearest city + population (only when present).
-4. **Why flagged** — the checklist of signals that actually fired (repeat
-   detections, near industrial facility, industrial land-use match, elevated FRP,
-   night-time detection, pattern anomaly). Absent/false signals are omitted.
-5. **Classification** — 3-class output + `predicted_label` + class probabilities +
-   the locked "anomalous departure, not a confirmed fire" framing.
-6. **Risk assessment** — the real `risk_factors` breakdown summing to the score.
-7. **Recommended action** — one operational recommendation derived from
-   `(severity, class, anomaly_flag)`, e.g. "ESCALATE FOR FIELD VERIFICATION" with
-   a one-line reason.
+### 11. Event intelligence **[AUTOMATED, on demand]**
 
-The analyst then decides — see journey B.
+For a given event:
 
-### 12. Analyst interaction (manual controls) **[MANUAL] [IMPLEMENTED]**
+- **Fingerprint** (`fingerprint.compute_fingerprint`) — six behavioural
+  dimensions (persistence, night activity, FRP intensity, spatial stability,
+  industrial proximity, seasonal alignment), each rated VERY LOW … VERY HIGH,
+  producing one of six behaviour categories.
+- **Evidence stack** (`evidence.build_evidence`) — SUPPORTING / LIMITING /
+  NEUTRAL items with category, value, explanation, and source; always includes
+  the two SYSTEM limiting items (VIIRS/MODIS resolution; no ground confirmation).
+- **Evolution** (`evolution.build_evolution`) — an ordered frame sequence
+  (cumulative count, FRP, risk, lat/lon, day/night) plus milestones (First
+  Detection; Persistence Detected; Peak FRP Observed; High-Risk Threshold
+  Crossed).
+- **Risk trajectory** (`early_warning.compute_trajectory`) — from the frame-level
+  risk history: `trajectory` (INCREASING / STABLE / DECREASING) and `state`
+  (STABLE / WATCH / INCREASING / EARLY WARNING / HIGH PRIORITY), with a signal
+  breakdown. **Describes an observed trend — never predicts.**
 
-- **Filters** — severity, status, date (Today / 24h / 7d / custom), classification;
-  **[PLANNED]** region/state. Shared across Command Center, Alerts, Map, Analytics.
-- **Alert feed** — severity-grouped, paginated; expand for assessment.
+### 12. Facility thermal baseline & deviation **[AUTOMATED, on demand]**
+
+For a given event (`queries.get_event_deviation`):
+
+1. The event centroid is matched to its nearest India facility via the shared
+   BallTree (`queries._facility_index`). If the nearest facility is > 10 km away,
+   there is no baseline (`NO_FACILITY`).
+2. `facility_fingerprint.build_facility_baseline` derives a baseline from every
+   India detection within 10 km of that facility: robust statistics
+   (median / IQR / MAD) for FRP and brightness temperature, median persistence,
+   day-night ratio, active months, and the observed window.
+3. **Gate:** with fewer than 6 observations across fewer than 2 distinct dates →
+   `baseline_quality = INSUFFICIENT_BASELINE` and no deviation is computed — an
+   honest state, not an invented one. (With a ~5-day FIRMS window this is the
+   common case.)
+4. `facility_fingerprint.compare_event_to_baseline` scores each available signal
+   0–100 (intensity, brightness, persistence, day/night, seasonal), combines them
+   by a configurable weight map → `thermal_deviation_score` (0–100) and a level
+   (NORMAL / ELEVATED / ABNORMAL / HIGHLY_ABNORMAL), with deterministic evidence
+   strings citing the actual numbers.
+5. This score is **surfaced separately** — on the Investigation "Facility Thermal
+   Baseline" panel, the Facilities table, and the Analytics section — and is
+   **never folded into `risk_score`** (`risk_engine.deviation_factor` exists as
+   an opt-in helper but is not called by `score_row`).
+
+### 13. Investigation workflow **[MANUAL, system-assembled]**
+
+`queries.get_investigation(alert_id)` assembles the sectioned view (header,
+detection, context, why-flagged, classification, risk assessment, recommended
+action) from real alert fields only. `dashboard/views/investigation.py` adds the
+event panels (fingerprint, evidence, evolution replay, trajectory, facility
+baseline) when the alert belongs to a multi-detection event. The analyst reads
+the "why", the comparisons, and the recommendation, then decides — journey F.
+
+### 14. Analyst manual controls **[MANUAL]**
+
+- **Filters** — severity, status, classification, state, window (All / Latest day
+  / Last 3 days / Last 7 days). Shared across pages via `dashboard/state.py`.
+- **Alert feed** — severity-grouped, paginated (12/page); expand for the
+  narrative + actions.
 - **Lifecycle actions** — **Acknowledge** (→ MONITORING), **Escalate**
-  (→ ESCALATED), **Resolve** (→ EXTINGUISHED). These write to `alerts.db` via
-  `alert_store.update_status`. **Manual only.**
-- **Analytics** — activity strip, calendar, period analysis, playback;
-  **[PLANNED]** baseline-vs-current FRP comparison.
-- **Facilities [PLANNED]** — table of known facilities with nearby detection
-  counts, repeat counts, max risk, historical activity.
-- **Pipeline re-run** — manual "Re-run" reseeds `alerts.db` from the scored data.
+  (→ ESCALATED), **Resolve** (→ EXTINGUISHED). Written to `alerts.db` via
+  `alert_store.update_status`, with toast feedback. **Manual only — the agent
+  cannot do this.**
+- **Re-run pipeline** — the Command Center quick action reseeds `alerts.db` from
+  the scored parquet.
+- **↻ Refresh Data** — the sidebar button forces a live FIRMS refresh (when
+  `FIRMS_MAP_KEY` is set).
 
-### 13. Fire Intelligence Agent workflow **[AGENT-ASSISTED, READ-ONLY] [IMPLEMENTED / OPTIONAL]**
+### 15. Fire Intelligence Agent workflow **[AGENT-ASSISTED, READ-ONLY]**
 
-The agent mode indicator shows **"CLAUDE"** (blue, `#3d7dc8`) when
-`ANTHROPIC_API_KEY` is set and `claude-sonnet-4-6` is used, or **"LOCAL"** (amber)
-when the offline deterministic parser is active. Previously a static "ONLINE" badge.
+The mode indicator shows **Claude-enhanced reasoning** when `ANTHROPIC_API_KEY`
+is set, **Local intelligence mode** otherwise.
 
 ```
-Analyst opens "⌘ Fire Intelligence" (command palette) on any page
+Analyst opens the agent (docked on Command Center, or ⌘ Ask Agent on any page)
         │
         ▼
 Types a natural-language query
         │
         ▼
-runtime.ask(query, {current_page, active_filters})
+runtime.ask(query, {page, filters, focus_alert_id})       ← never raises
         │
-        ├─ ANTHROPIC_API_KEY set  → Claude tool-use loop      [OPTIONAL/FUTURE]
-        └─ otherwise              → deterministic parser       [PLANNED — baseline, always works]
+        ├─ ANTHROPIC_API_KEY set + anthropic importable → Claude tool-use loop (≤4 rounds)
+        │                                                  any failure → fall through
+        └─ otherwise                                     → deterministic parser (baseline)
         │
         ▼
-Parser/LLM emits read-only tool call(s) from the fixed registry
-   (queries.list_alerts / rank_alerts / situation_summary / compare_regions /
-    get_investigation / facilities_with_activity / analytics_summary /
-    baseline_comparison / incidents;
-    actions.export_geojson / export_csv / build_incident_report)
+Emits read-only tool call(s) from the fixed 26-tool registry:
+   alert/analytics (13): list_alerts, rank_alerts, get_alert, get_investigation,
+     situation_summary, compare_regions, facilities_with_activity, analytics_summary,
+     baseline_comparison, incidents, build_incident_report, export_geojson, export_csv
+   thermal event (8): list_events, get_event, get_event_fingerprint, get_event_evidence,
+     get_event_evolution, get_event_trajectory, find_increasing_risk_events, events_situation
+   facility fingerprint (5): get_facility_fingerprint, get_event_deviation,
+     rank_facilities_by_deviation, find_abnormal_facilities, facility_fingerprint_summary
         │
         ▼
 Tools run against src/intelligence/ → src/alerting/ + committed data
         │
         ▼
-response.py formats a grounded NL answer + result_cards + ui_action
+response.build() → a grounded NL answer + result_cards + ui_action
         │
         ▼
-Panel shows the answer and result cards:
-   [Open Investigation]  → set focus_alert_id + navigate to Investigation
-   [Show on Map]         → apply filters + navigate to Map (the existing map)
-   [Generate Report]     → build_incident_report → download
+Panel renders the answer and cards:
+   [Open Investigation]  → focus_alert_id + navigate to Investigation
+   [Show on Map]         → apply filters + navigate to Map Explorer
+   [Generate Report]     → navigate to Reports / GIS (same build_incident_report)
         │
         ▼
-ui_action applied through dashboard/state.py → st.rerun()
-   (identical to the analyst having set those filters / navigated by hand)
+ui_action applied via dashboard/state.py → st.rerun()
+   (indistinguishable from the analyst having set those filters / navigated by hand)
 ```
 
-What the agent **may** do this round: answer questions from real data; search /
-filter / rank / aggregate; apply shared filters; navigate; focus the existing map;
-open an investigation; generate a report.
+**May:** answer from real data; search / filter / rank / aggregate over alerts,
+events, and facilities; find increasing-risk events; find abnormal facilities;
+apply shared filters; navigate; focus the map; open an investigation; generate a
+report.
 
-What the agent **must not** do this round: acknowledge / escalate / resolve /
-modify any incident state; fabricate a value (it says "not available"); issue SQL
-or arbitrary code; open a second map; dominate the UI. A state-change request is
-explained and redirected to the manual control (with an "Open Investigation"
-card).
+**Must not:** acknowledge / escalate / resolve / modify any incident state
+(a state-change request is explained and redirected to the manual control with an
+"Open Investigation" card); fabricate a value (says "not available"); issue SQL
+or arbitrary code; open a second map; dominate the UI; crash the panel.
 
-**[OPTIONAL/FUTURE]** agent state-changing actions behind an explicit confirmation
-gate — deferred.
+### 16. Reporting workflow **[MANUAL or AGENT-ASSISTED]**
 
-### 14. Reporting workflow **[MANUAL or AGENT-ASSISTED] [IMPLEMENTED export, PLANNED report]**
+- **GIS export** — filter-aware GeoJSON `FeatureCollection` (each alert a Point
+  with the full attribute table) and CSV (`actions.export_geojson` /
+  `export_csv`).
+- **Incident report** — `actions.build_incident_report(filters)` → a Markdown /
+  CSV summary of the filtered critical/high alerts for the current window.
+- Triggered from Reports / GIS, or by the agent ("generate a report for critical
+  industrial fires this week") — the same underlying function.
 
-- **GIS export** — GeoJSON `FeatureCollection` (each alert a Point with the full
-  attribute table) and CSV, both respecting the active filters
-  (`actions.export_geojson` / `export_csv`).
-- **Incident report [PLANNED]** — `actions.build_incident_report(filters)`
-  produces a Markdown / CSV summary of the filtered critical / industrial-fire
-  alerts for a period.
-- Triggered from the Reports / GIS page, from Investigation ("generate a report
-  for this"), or by the agent ("generate a report for critical industrial fires
-  this week") — same underlying function.
+### 17. Feedback **[MANUAL]**
 
-### 15. Feedback / manual actions **[MANUAL] [IMPLEMENTED]**
-
-- Lifecycle state changes (Acknowledge / Escalate / Resolve) are the analyst's
-  feedback into the system and persist in `alerts.db`.
-- The daily severity aggregation (`timeline.get_daily_summary`) reflects the
-  current store, so Analytics updates as alerts are worked.
-- No model-retraining feedback loop this round.
+- Lifecycle state changes are the analyst's feedback; they persist in `alerts.db`
+  and flow through to the counts and the daily aggregation on the next rerun.
+- **No model-retraining feedback loop** this round.
 
 ---
 
 ## Part 3 — User journeys
 
-Notation: **[A]** automated system action · **[M]** manual analyst action ·
-**[G]** agent-assisted (read-only).
+Notation: **[A]** automated · **[M]** manual · **[G]** agent-assisted (read-only).
 
 ### A. Analyst discovers new thermal activity
 
-1. **[A]** Pipeline has scored the latest FIRMS India detections; alerts are in
-   the store.
-2. **[M]** Analyst opens the **Command Center**: reads the situation line
-   (active alerts, criticals), scans the live map, sees the top-5 priority
-   alerts and the 14-day activity strip.
-3. **[M]** Something stands out (a red cluster, a spike on the strip) → clicks a
-   priority-alert row or a map marker.
-4. → journey B.
+1. **[A]** The pipeline has scored the latest FIRMS India detections; alerts are
+   in the store (or a live refresh just reseeded it).
+2. **[M]** Opens the **Command Center**: reads the KPI row (active alerts,
+   criticals) and the event KPI row (thermal events, high-risk, persistent
+   sources, early warnings), scans the live map, checks the top priority alerts
+   and the activity timeline.
+3. **[M]** Something stands out (a red cluster; a spike on the timeline; a
+   non-zero "Early Warnings" count) → clicks a priority-alert card or a map
+   marker → journey B.
 
-### B. Analyst investigates an alert
+### B. Analyst investigates an alert / event
 
-1. **[M]** From Alerts (row → "View Investigation") or the Map (marker) or the
-   agent (result card), the analyst lands on **Investigation** for that alert.
-2. **[A]** `get_investigation` assembles the sectioned view.
-3. **[M]** Analyst reads **Why flagged** and **Risk assessment** — the real
-   evidence — and the **Recommended action**.
-4. **[M]** Analyst cross-checks on the map ("Show on Map") and, if useful,
-   generates a report.
-5. → journey F (decide).
+1. **[M]** From Alerts (`View investigation →`), the Map (marker), the THERMAL
+   EVENTS tab (`Investigate →`), or an agent result card → **Investigation** for
+   that alert.
+2. **[A]** `get_investigation` assembles the base view; the event panels
+   (fingerprint, evidence, evolution, trajectory, **facility baseline**) render
+   when the alert belongs to a multi-detection event.
+3. **[M]** Reads **Why flagged**, **Risk assessment**, the **Risk Trajectory**,
+   and the **Facility Thermal Baseline** — is this event unusual *for this site*?
+4. **[M]** Cross-checks on the map ("Show on map →"); generates a report if
+   useful → journey F.
 
-### C. Analyst asks the Fire Intelligence Agent a question
+### C. Analyst asks the agent a question
 
-1. **[M]** Opens "⌘ Fire Intelligence", asks e.g. *"Which persistent sources are
-   close to industrial facilities in Odisha?"*
-2. **[A/G]** Deterministic parser (or Claude, if a key is set) extracts
-   `output_class = Persistent Source`, `state = Odisha`, `near_facility = true` →
-   calls `queries.list_alerts` / `facilities_with_activity`.
-3. **[A]** A grounded answer + result cards render. Values are real; anything
-   missing is stated as "not available".
-4. **[M]** Analyst clicks **Open Investigation** on the top result → journey B.
+1. **[M]** *"Which persistent sources near industrial facilities in Odisha are
+   unusual for their site?"* or *"How unusual is event `3ac7afa3`?"*
+2. **[A/G]** Deterministic parser (or Claude) extracts the intent → calls
+   `queries.list_alerts` / `get_event_deviation` / `rank_facilities_by_deviation`.
+3. **[A]** A grounded answer + result cards render. Real values only; anything
+   missing is stated as "not available" (e.g. INSUFFICIENT_BASELINE).
+4. **[M]** Clicks **Open Investigation** on the top result → journey B.
 
-### D. Analyst filters the map using natural language
+### D. Analyst filters the map with natural language
 
-1. **[M]** Asks *"Show me critical alerts in eastern India from the last 7 days."*
-2. **[A/G]** Parser → `ui_action = { nav: "map", filters: { severity:
-   ["CRITICAL"], region: "eastern india", date_from: today-7, date_to: today } }`.
-3. **[A]** `state.py` applies the filters; app reruns; the **Map** shows exactly
-   that subset — the same result as setting those filters by hand.
-4. **[M]** Analyst continues manually (zoom, click, toggle layers).
+1. **[M]** *"Show critical alerts in eastern India from the last 7 days."*
+2. **[A/G]** Parser → `ui_action = {nav: "Map Explorer", filters: {severity:
+   ["CRITICAL"], region: "eastern india", date_from: hi-7, date_to: hi}}`.
+3. **[A]** `state.py` applies the filters; the app reruns; **Map Explorer** shows
+   exactly that subset — identical to setting the filters by hand.
+4. **[M]** Continues manually (zoom, click, toggle layers).
 
 ### E. Analyst generates a report
 
-1. **[M]** On Reports / GIS (or via Investigation, or via the agent: *"Generate a
-   report for critical industrial fires this week"*).
-2. **[A]** `actions.build_incident_report(filters)` builds the Markdown / CSV
-   summary from real alert fields; GeoJSON / CSV export is available alongside.
-3. **[M]** Analyst downloads the artefact for a briefing or a GIS tool.
+1. **[M]** On Reports / GIS, or via the agent (*"Generate a report for critical
+   industrial fires this week"*).
+2. **[A]** `build_incident_report(filters)` builds the Markdown / CSV summary from
+   real alert fields; GeoJSON / CSV export is available alongside.
+3. **[M]** Downloads the artefact for a briefing or a GIS tool.
 
-### F. Analyst manually acknowledges / escalates / resolves an alert
+### F. Analyst manually acknowledges / escalates / resolves
 
-1. **[M]** From Alerts (expander) or Investigation, the analyst chooses
+1. **[M]** From the Alerts expander or the Investigation page, chooses
    **Acknowledge**, **Escalate**, or **Resolve**.
 2. **[A]** `alert_store.update_status` writes the new lifecycle state (and
-   `acknowledged_at` for Acknowledge) to `alerts.db`.
-3. **[A]** The feed, counts, and daily aggregation reflect the change on the next
-   rerun.
+   `acknowledged_at` for Acknowledge) to `alerts.db`; a toast confirms.
+3. **[A]** The feed, counts, event clustering, and daily aggregation reflect the
+   change on the next rerun (the DB-mtime cache key invalidates).
 4. Note: **the agent cannot perform this step.** If asked, it explains the manual
    control and offers to open the Investigation.
 
@@ -302,19 +371,20 @@ Notation: **[A]** automated system action · **[M]** manual analyst action ·
 
 | Action | Automated | Manual | Agent (read-only) |
 |---|:--:|:--:|:--:|
-| FIRMS ingestion, cleaning, feature extraction | ✅ | | |
-| Facility-context enrichment | ✅ | | |
-| Classification + anomaly flag | ✅ | | |
+| FIRMS ingestion, cleaning, feature engineering | ✅ | | |
+| Facility-context enrichment (BallTree proximity) | ✅ | | |
+| RandomForest classification + anomaly flag | ✅ | | |
 | Persistence detection | ✅ | | |
 | Risk scoring + severity + alert creation | ✅ | | |
-| Store seeding / auto-seed on first run | ✅ | ✅ (Re-run / ↻ Refresh Data) | |
-| Live FIRMS NRT refresh (startup + manual button) | ✅ | ✅ | |
+| Store seeding / auto-seed on first run | ✅ | ✅ (Re-run) | |
+| Live FIRMS NRT refresh | ✅ (startup) | ✅ (↻ Refresh Data) | |
+| Thermal-event clustering | ✅ (derived) | | |
+| Event fingerprint / evidence / evolution / trajectory | ✅ (on demand) | | |
+| Facility thermal baseline + deviation | ✅ (on demand) | | |
 | Investigation assembly | ✅ | | |
-| Browsing / filtering / navigating | | ✅ | ✅ |
-| Focusing the map | | ✅ | ✅ |
+| Browsing / filtering / navigating / focusing the map | | ✅ | ✅ |
 | Opening an investigation | | ✅ | ✅ |
 | Asking questions / ranking / comparing / summarising | | ✅ | ✅ |
 | GIS export / incident report | | ✅ | ✅ |
-| Acknowledge / Escalate / Resolve | | ✅ | ❌ (deferred) |
-| Modifying incident state in any way | | ✅ | ❌ (deferred) |
-| Model retraining | | | |
+| Acknowledge / Escalate / Resolve; any state change | | ✅ | ❌ (deferred) |
+| Model retraining | ❌ (offline pipeline, not in the app) | | ❌ |
