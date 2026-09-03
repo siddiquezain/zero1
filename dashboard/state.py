@@ -31,7 +31,6 @@ _PAGE_ROUTE = {
     "facilities": "Facilities",
     "reports": "Reports / GIS", "reports / gis": "Reports / GIS", "gis": "Reports / GIS",
     "model": "Model",
-    "limitations": "Limitations",
 }
 
 

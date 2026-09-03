@@ -34,7 +34,7 @@ elif _refresh["status"] == "error":
 
 from dashboard import shell                                    # noqa: E402
 from dashboard.views import (alerts, analytics, command_center, facilities,      # noqa: E402
-                             investigation, limitations, map_explorer, model, reports)
+                             investigation, map_explorer, model, reports)
 
 _PAGES = {
     "Command Center": (command_center.render, ":material/dashboard:", "Overview & summary"),
@@ -45,7 +45,6 @@ _PAGES = {
     "Facilities": (facilities.render, ":material/factory:", "Industrial infrastructure"),
     "Reports / GIS": (reports.render, ":material/description:", "GIS & downloads"),
     "Model": (model.render, ":material/account_tree:", "Pipeline & performance"),
-    "Limitations": (limitations.render, ":material/info:", "Data & system limits"),
 }
 
 # apply a pending navigation request from a button / the agent

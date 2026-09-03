@@ -9,6 +9,9 @@ from dashboard import theme as T
 from dashboard.components import filterbar, ui
 from dashboard.shell import topbar
 
+# fixed detection→facility search radius (matches the fingerprint association radius)
+_RADIUS_KM = 10.0
+
 
 def render() -> None:
     topbar("Facilities")
@@ -16,15 +19,15 @@ def render() -> None:
                    "Known Indian industrial facilities with nearby thermal detections")
 
     filterbar.render(key="fac_fb", show_status=False, show_class=True)
-    radius = st.slider("Search radius (km)", 2, 25, 10, key="fac_radius")
 
-    facs = data.FACILITIES(state.filters(), limit=120, radius_km=float(radius))
+    facs = data.FACILITIES(state.filters(), limit=120, radius_km=_RADIUS_KM)
     if not facs:
         ui.empty_state("No known facilities have nearby detections for this scope.",
-                       "Increase the radius or widen the filters.")
+                       "Widen the filters.")
         return
 
-    ui.section(f"{len(facs)} facilities with nearby activity", f"within {radius} km")
+    ui.section(f"{len(facs)} facilities with nearby activity",
+               f"within {_RADIUS_KM:.0f} km")
     df = pd.DataFrame([{
         "Facility": f["name"],
         "Type": f["hazard_type"],
@@ -84,5 +87,5 @@ def render() -> None:
                     f'long-run archive.</div>', unsafe_allow_html=True)
         if st.button("Show this area on the map  →", key="fac_tomap"):
             state.set_filters({"state": [fac["state"]] if fac.get("state") else [],
-                               "max_dist_facility_km": float(radius)})
+                               "max_dist_facility_km": _RADIUS_KM})
             state.request_nav("Map Explorer"); st.rerun()
