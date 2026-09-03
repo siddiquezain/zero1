@@ -8,10 +8,14 @@ streamlit>=1.40
 pydeck>=0.9
 plotly>=5.20
 python-dotenv>=1.0
-matplotlib>=3.7
 scipy>=1.11
-tqdm>=4.66
 
 # Optional — enables the Claude runtime for the Fire Intelligence Agent.
 # The app + deterministic agent work fully WITHOUT this / an API key.
 anthropic>=0.40
+
+# Offline-only — used by src/ingestion/visualise.py (sanity-check plots), not by
+# the dashboard, the intelligence layer, or the test suite. Not installed on the
+# hosted deployment. Add back locally if you run that script:
+#   matplotlib>=3.7
+#   tqdm>=4.66
