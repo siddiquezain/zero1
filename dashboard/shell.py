@@ -30,7 +30,12 @@ def brand() -> None:
 def sidebar_refresh_card() -> None:
     """Sidebar FIRMS refresh control — only rendered when FIRMS_MAP_KEY is set."""
     age = _firms_age_hours()
-    age_str = f"{age:.0f}h ago" if age < 48 else "snapshot"
+    if age < 2:
+        age_str = "just now"
+    elif age < 48:
+        age_str = f"{age:.0f}h ago"
+    else:
+        age_str = f"{age / 24:.0f} days ago"
     st.markdown('<div style="height:4px"></div>', unsafe_allow_html=True)
     st.markdown(
         f'<div class="panel" style="padding:9px 12px">'

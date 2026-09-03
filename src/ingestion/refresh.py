@@ -17,7 +17,8 @@ Falls back to existing data on any failure — the dashboard always has data.
 from __future__ import annotations
 
 import logging
-import time
+import sqlite3
+from datetime import date
 from pathlib import Path
 
 import joblib
@@ -39,6 +40,7 @@ _ROOT = Path(__file__).resolve().parents[2]
 _SCORES_PATH = _ROOT / "data/processed/stage6_india_scores.parquet"
 _FACILITIES_PATH = _ROOT / "data/processed/facilities.parquet"
 _MODEL_PATH = _ROOT / "data/processed/stage6_model.joblib"
+_DB_PATH = _ROOT / "data/alerts.db"
 _ANOMALY_THRESHOLD = 0.55
 _AGRI_MONTHS = {1, 2, 4, 5, 7, 8, 9, 10, 11}
 
@@ -54,9 +56,20 @@ _TRAIN_FEATURES = [
 
 
 def _age_hours() -> float:
-    if not _SCORES_PATH.exists():
+    """Hours since the latest acq_date in the alert store (wall-clock, not file mtime)."""
+    if not _DB_PATH.exists():
         return float("inf")
-    return (time.time() - _SCORES_PATH.stat().st_mtime) / 3600
+    try:
+        con = sqlite3.connect(_DB_PATH)
+        row = con.execute("SELECT MAX(acq_date) FROM alerts").fetchone()
+        con.close()
+        latest = row[0] if row and row[0] else None
+        if not latest:
+            return float("inf")
+        latest_date = date.fromisoformat(str(latest)[:10])
+        return (date.today() - latest_date).total_seconds() / 3600
+    except Exception:
+        return float("inf")
 
 
 def _bt_col(df: pd.DataFrame) -> str:
